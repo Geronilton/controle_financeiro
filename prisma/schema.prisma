@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id                Int               @id @default(autoincrement())
+  nome              String
+  email             String            @unique
+  senhaHash         String
+  criadoEm          DateTime          @default(now())
+  tipo              TipoUsuario       @default(USUARIO)
+  categorias        Categoria[]
+  contasFinanceiras ContaFinanceira[]
+  lancamentos       Lancamento[]
+  participantes     Participante[]
+  recorrencias      Recorrencia[]
+
+  @@map("usuario")
+}
+
+model Categoria {
+  id           Int             @id @default(autoincrement())
+  nome         String
+  tipo         TipoLancamento?
+  usuarioId    Int
+  criadoEm     DateTime        @default(now())
+  ativo        Boolean         @default(true)
+  usuario      Usuario         @relation(fields: [usuarioId], references: [id])
+  lancamentos  Lancamento[]
+  recorrencias Recorrencia[]
+
+  @@unique([usuarioId, nome])
+  @@index([usuarioId])
+  @@map("categoria")
+}
+
+model Lancamento {
+  id                 Int              @id @default(autoincrement())
+  descricao          String
+  valor              Decimal          @db.Decimal(10, 2)
+  valorPago          Decimal          @default(0) @db.Decimal(10, 2)
+  tipo               TipoLancamento
+  status             StatusLancamento
+  formaPagamento     TipoPagamento?
+  dataLancamento     DateTime
+  dataVencimento     DateTime?
+  observacao         String?
+  origem             OrigemLancamento @default(MANUAL)
+  periodicidade      Periodicidade?
+  quantidadeParcelas Int              @default(1)
+  contaFinanceiraId  Int?
+  usuarioId          Int
+  categoriaId        Int?
+  criadoEm           DateTime         @default(now())
+  atualizadoEm       DateTime         @updatedAt
+  participanteId     Int?
+  recorrenciaId      Int?
+  dataPagamento      DateTime?
+  categoria          Categoria?       @relation(fields: [categoriaId], references: [id])
+  contaFinanceira    ContaFinanceira? @relation(fields: [contaFinanceiraId], references: [id])
+  participante       Participante?    @relation(fields: [participanteId], references: [id])
+  recorrencia        Recorrencia?     @relation(fields: [recorrenciaId], references: [id])
+  usuario            Usuario          @relation(fields: [usuarioId], references: [id])
+  parcelas           Parcela[]
+
+  @@index([usuarioId])
+  @@index([status])
+  @@index([dataLancamento])
+  @@index([categoriaId])
+  @@map("lancamento")
+}
+
+model Parcela {
+  id            Int              @id @default(autoincrement())
+  lancamentoId  Int
+  numeroParcela Int
+  valorParcela  Decimal          @db.Decimal(10, 2)
+  vencimento    DateTime
+  status        StatusParcela
+  dataPagamento DateTime?
+  criadoEm      DateTime         @default(now())
+  atualizadoEm  DateTime         @updatedAt
+  lancamento    Lancamento       @relation(fields: [lancamentoId], references: [id])
+
+  @@index([lancamentoId])
+  @@index([status])
+  @@index([vencimento])
+  @@map("parcela")
+}
+
+model Participante {
+  id          Int          @id @default(autoincrement())
+  nome        String
+  apelido     String?
+  telefone    String?
+  observacao  String?
+  usuarioId   Int
+  criadoEm    DateTime     @default(now())
+  ativo       Boolean      @default(true)
+  lancamentos Lancamento[]
+  usuario     Usuario      @relation(fields: [usuarioId], references: [id])
+
+  @@unique([usuarioId, nome])
+  @@index([usuarioId])
+  @@map("participante")
+}
+
+model ContaFinanceira {
+  id           Int           @id @default(autoincrement())
+  nome         String
+  descricao    String?
+  saldo        Decimal       @default(0) @db.Decimal(10, 2)
+  objetivo     Decimal?      @db.Decimal(10, 2)
+  usuarioId    Int
+  criadoEm     DateTime      @default(now())
+  atualizadoEm DateTime      @updatedAt
+  ativo        Boolean       @default(true)
+  usuario      Usuario       @relation(fields: [usuarioId], references: [id])
+  lancamentos  Lancamento[]
+  recorrencias Recorrencia[]
+
+  @@index([usuarioId])
+  @@map("conta_financeira")
+}
+
+model Recorrencia {
+  id                Int              @id @default(autoincrement())
+  descricao         String
+  valor             Decimal          @db.Decimal(10, 2)
+  tipo              TipoLancamento
+  formaPagamento    TipoPagamento?
+  periodicidade     Periodicidade
+  vencimento        DateTime
+  status            StatusLancamento
+  usuarioId         Int
+  categoriaId       Int?
+  contaFinanceiraId Int?
+  criadoEm          DateTime         @default(now())
+  atualizadoEm      DateTime         @updatedAt
+  ativo             Boolean          @default(true)
+  lancamentos       Lancamento[]
+  categoria         Categoria?       @relation(fields: [categoriaId], references: [id])
+  contaFinanceira   ContaFinanceira? @relation(fields: [contaFinanceiraId], references: [id])
+  usuario           Usuario          @relation(fields: [usuarioId], references: [id])
+
+  @@map("recorrencia")
+}
+
+enum TipoUsuario {
+  USUARIO
+  ADMIN
+}
+
+enum Periodicidade {
+  DIARIA
+  SEMANAL
+  QUINZENAL
+  MENSAL
+  BIMESTRAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
+enum TipoLancamento {
+  ENTRADA
+  SAIDA
+}
+
+enum StatusLancamento {
+  PENDENTE
+  PAGO
+  CANCELADO
+  PAUSADO
+}
+
+enum StatusParcela {
+  PENDENTE
+  PAGO
+}
+
+enum TipoPagamento {
+  PIX
+  DINHEIRO
+  CARTAO
+  TRANSFERENCIA
+}
+
+enum OrigemLancamento {
+  MANUAL
+  RECORRENCIA
+}
