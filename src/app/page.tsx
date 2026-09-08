@@ -58,8 +58,6 @@ export default async function Home({
 
       <section className={styles.header}>
         <div>
-          <h1>Finanças</h1>
-
           <p>
             Controle suas movimentações financeiras.
           </p>

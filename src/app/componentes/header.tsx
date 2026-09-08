@@ -1,5 +1,6 @@
 import Menu from "@/app/componentes/menu";
 import styles from "@/app/styles/header.module.css";
+import Link from "next/link";
 
 export default function Header() {
   return (
@@ -8,8 +9,11 @@ export default function Header() {
         <Menu />
 
         <div className={styles.brand}>
-          <strong>Fluxo de Caixa</strong>
-          <span>Controle financeiro</span>
+           <Link href="/">
+            <strong>Fluxo de Caixa</strong>
+            <br />
+            <span>Controle financeiro</span>
+          </Link>
         </div>
       </div>
 
