@@ -455,7 +455,6 @@ export async function Editar_recorrencia(
       data: {
         descricao,
         valor,
-        valorPago,
         tipo,
         status,
         formaPagamento,
