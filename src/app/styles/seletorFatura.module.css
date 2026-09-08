@@ -1,0 +1,143 @@
+
+.seletor {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* PARTICIPANTES */
+
+.participantes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.participante,
+.participanteAtivo {
+  flex-shrink: 0;
+  padding: 9px 16px;
+  border-radius: 20px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.participante:hover {
+  border-color: #cbd5e1;
+  color: #374151;
+}
+
+.participanteAtivo {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+/* MESES */
+
+.mesesContainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+}
+
+.meses {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.meses::-webkit-scrollbar {
+  display: none;
+}
+
+.mes,
+.mesAtivo {
+  flex-shrink: 0;
+  padding: 9px 13px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.mes:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.mesAtivo {
+  background: #111827;
+  color: #fff;
+  font-weight: 600;
+}
+
+.mesAtivo:hover {
+  background: #1f2937;
+  color: #fff;
+}
+
+/* SETAS */
+
+.navegar {
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 16px;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.navegar:hover {
+  background: #f3f4f6;
+}
+
+/* ANO */
+
+.ano {
+  align-self: center;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* MOBILE */
+
+@media (max-width: 700px) {
+
+  .mesesContainer {
+    gap: 4px;
+  }
+
+  .mes {
+    padding: 8px 11px;
+    font-size: 12px;
+  }
+
+  .navegar {
+    width: 32px;
+    height: 32px;
+  }
+
+}
