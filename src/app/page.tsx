@@ -23,7 +23,11 @@ export default async function Home({
   if (usuarioId === null) {
     redirect("/usuario/login");
   }
-  await Processar_recorrencias();
+  try {
+    await Processar_recorrencias();
+  } catch (erro) {
+    console.error("Erro ao processar recorrências:", erro);
+  }
   const dados = await Dados_dashboard();
 
   const participantes =
