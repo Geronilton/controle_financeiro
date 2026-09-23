@@ -214,6 +214,7 @@ export async function Fatura_participante(
     ) {
       itens.push({
         id: `lancamento-${lancamento.id}`,
+        lancamentoId: lancamento.id,
         descricao: lancamento.descricao,
         valor: Number(lancamento.valor),
         status: lancamento.status,

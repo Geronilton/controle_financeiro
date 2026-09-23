@@ -13,6 +13,7 @@ type ContaFinanceira = {
 
 type LancamentoFatura = {
   id: string;
+  lancamentoId?: number;
   parcelaId?: number;
   descricao: string;
   valor: number;
@@ -51,31 +52,29 @@ export default function FaturaPagamento({
   );
 
   function alternarSelecao(lancamento: LancamentoFatura) {
-    if (lancamento.parcelaId !== undefined) {
-      setParcelasSelecionadas((atual) =>
-        atual.includes(lancamento.parcelaId!)
-          ? atual.filter((id) => id !== lancamento.parcelaId)
-          : [...atual, lancamento.parcelaId!]
-      );
-
-      return;
-    }
-
-    const lancamentoId = Number(lancamento.id);
-
-    setLancamentosSelecionados((atual) =>
-      atual.includes(lancamentoId)
-        ? atual.filter((id) => id !== lancamentoId)
-        : [...atual, lancamentoId]
+  if (lancamento.parcelaId !== undefined) {
+    setParcelasSelecionadas((atual) =>
+      atual.includes(lancamento.parcelaId!)
+        ? atual.filter((id) => id !== lancamento.parcelaId)
+        : [...atual, lancamento.parcelaId!]
     );
+    return;
+  }
+
+  const lancamentoId = lancamento.lancamentoId!;
+
+  setLancamentosSelecionados((atual) =>
+    atual.includes(lancamentoId)
+      ? atual.filter((id) => id !== lancamentoId)
+      : [...atual, lancamentoId]
+  );
   }
 
   function estaSelecionado(lancamento: LancamentoFatura) {
     if (lancamento.parcelaId !== undefined) {
       return parcelasSelecionadas.includes(lancamento.parcelaId);
     }
-
-    return lancamentosSelecionados.includes(Number(lancamento.id));
+    return lancamentosSelecionados.includes(lancamento.lancamentoId!);
   }
 
   function limparSelecao() {
