@@ -67,6 +67,8 @@ model Lancamento {
   usuario            Usuario          @relation(fields: [usuarioId], references: [id])
   parcelas           Parcela[]
 
+  @@unique([recorrenciaId, dataVencimento])
+
   @@index([usuarioId])
   @@index([status])
   @@index([dataLancamento])
