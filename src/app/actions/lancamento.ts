@@ -7,7 +7,8 @@ import {
   StatusParcela,
   TipoPagamento,
   OrigemLancamento,
-  Periodicidade
+  Periodicidade,
+  Prisma
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -742,78 +743,82 @@ export async function Editar_lancamento(
 export async function Processar_recorrencias() {
   const agora = new Date();
   const usuarioId = await exigirUsuarioId();
+
   if (usuarioId === null) {
     throw new Error("Usuário não autenticado.");
   }
+
+  const limiteAntecipacao = new Date(agora);
+  limiteAntecipacao.setDate(limiteAntecipacao.getDate() + 10);
+
   const recorrencias = await prisma.recorrencia.findMany({
     where: {
       ativo: true,
-      usuarioId
+      usuarioId,
     },
   });
 
   for (const recorrencia of recorrencias) {
-    await prisma.$transaction(async (tx) => {
-      // Procura o último lançamento gerado por essa recorrência
-      const ultimoLancamento = await tx.lancamento.findFirst({
-        where: {
-          recorrenciaId: recorrencia.id,
-          origem: OrigemLancamento.RECORRENCIA,
-        },
-        orderBy: {
-          dataVencimento: "desc",
-        },
-      });
-
-      // Se já existem lançamentos, calcula a partir do último.
-      // Caso contrário, começa pelo vencimento da recorrência.
-      let vencimento = ultimoLancamento
-        ? proximoVencimento(
-            ultimoLancamento.dataVencimento!,
-            recorrencia.periodicidade
-          )
-        : new Date(recorrencia.vencimento);
-
-      while (vencimento <= agora) {
-        const existente = await tx.lancamento.findFirst({
+    await prisma.$transaction(
+      async (tx) => {
+        const ultimoLancamento = await tx.lancamento.findFirst({
           where: {
             recorrenciaId: recorrencia.id,
-            dataVencimento: vencimento,
+            origem: OrigemLancamento.RECORRENCIA,
+          },
+          orderBy: {
+            dataVencimento: "desc",
           },
         });
 
-        if (!existente) {
-          await tx.lancamento.create({
-            data: {
-              descricao: recorrencia.descricao,
-              valor: recorrencia.valor,
-              valorPago: 0,
+        let vencimento = ultimoLancamento
+          ? proximoVencimento(
+              ultimoLancamento.dataVencimento!,
+              recorrencia.periodicidade
+            )
+          : new Date(recorrencia.vencimento);
 
-              tipo: recorrencia.tipo,
-              status: StatusLancamento.PENDENTE,
-              formaPagamento: recorrencia.formaPagamento,
+        while (vencimento <= limiteAntecipacao) {
+          try {
+            await tx.lancamento.create({
+              data: {
+                descricao: recorrencia.descricao,
+                valor: recorrencia.valor,
+                valorPago: 0,
 
-              dataLancamento: new Date(),
-              dataVencimento: vencimento,
+                tipo: recorrencia.tipo,
+                status: StatusLancamento.PENDENTE,
+                formaPagamento: recorrencia.formaPagamento,
 
-              origem: OrigemLancamento.RECORRENCIA,
-              quantidadeParcelas: 1,
+                dataLancamento: new Date(),
+                dataVencimento: vencimento,
 
-              usuarioId: recorrencia.usuarioId,
-              categoriaId: recorrencia.categoriaId,
-              contaFinanceiraId: recorrencia.contaFinanceiraId,
+                origem: OrigemLancamento.RECORRENCIA,
+                quantidadeParcelas: 1,
 
-              recorrenciaId: recorrencia.id,
-            },
-          });
+                usuarioId: recorrencia.usuarioId,
+                categoriaId: recorrencia.categoriaId,
+                contaFinanceiraId: recorrencia.contaFinanceiraId,
+
+                recorrenciaId: recorrencia.id,
+              },
+            });
+          } catch (erro) {
+            if (
+              erro instanceof Prisma.PrismaClientKnownRequestError &&
+              erro.code === "P2002"
+            ) {
+              // já existe lançamento pra esse vencimento — segue o loop
+            } else {
+              throw erro;
+            }
+          }
+
+          vencimento = proximoVencimento(vencimento, recorrencia.periodicidade);
         }
-
-        vencimento = proximoVencimento(
-          vencimento,
-          recorrencia.periodicidade
-        );
-      }
-    });
+      },
+      { timeout: 30000 }
+    );
   }
 }
 
@@ -832,13 +837,25 @@ function proximoVencimento(
       proximo.setDate(proximo.getDate() + 7);
       break;
 
-    case Periodicidade.MENSAL:
-      proximo.setMonth(proximo.getMonth() + 1);
-      break;
-
     case Periodicidade.ANUAL:
       proximo.setFullYear(proximo.getFullYear() + 1);
       break;
+
+    case Periodicidade.MENSAL:
+    default: {
+      const dia = proximo.getDate();
+      proximo.setDate(1); 
+      proximo.setMonth(proximo.getMonth() + 1);
+
+      const ultimoDiaDoMes = new Date(
+        proximo.getFullYear(),
+        proximo.getMonth() + 1,
+        0
+      ).getDate();
+
+      proximo.setDate(Math.min(dia, ultimoDiaDoMes));
+      break;
+    }
   }
 
   return proximo;
