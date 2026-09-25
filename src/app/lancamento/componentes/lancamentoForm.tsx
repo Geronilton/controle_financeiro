@@ -8,6 +8,7 @@ import ValorLancamento from "./ValorLancamento";
 type Categoria = {
   id: number;
   nome: string;
+  tipo: "ENTRADA" | "SAIDA" | null;
 };
 
 type Participante = {
@@ -44,7 +45,7 @@ type Props = {
   modoEdicao?: boolean;
   modoRecorrencia?: boolean;
 };
-
+const FORMAS_QUE_EXIGEM_VENCIMENTO = ["CARTAO"];
 export default function LancamentoForm({
   action,
   tipoInicial,
@@ -80,7 +81,19 @@ export default function LancamentoForm({
   const dia = String(hoje.getDate()).padStart(2, "0");
 
   return `${ano}-${mes}-${dia}`;
-}
+  }
+  const categoriasFiltradas = categorias.filter(
+    (categoria) =>
+      categoria.tipo === null || categoria.tipo === tipoInicial
+  );
+  const [formaPagamentoAtual, setFormaPagamentoAtual] = useState(
+    formaPagamento
+  );
+  const [Recorrente, setRecorrente] = useState(!!periodicidade);
+  const exigeVencimento =
+    modoRecorrencia ||
+    Recorrente ||
+    tipoInicial === "SAIDA" && FORMAS_QUE_EXIGEM_VENCIMENTO.includes(formaPagamentoAtual);
 
   return (
     <div className={Styles.container}>
@@ -128,6 +141,7 @@ export default function LancamentoForm({
             valorInicial={valor}
             formaPagamentoInicial={formaPagamento}
             statusInicial={status}
+            onFormaPagamentoChange={setFormaPagamentoAtual}
           />
 
           {/* CONTA FINANCEIRA */}
@@ -161,7 +175,8 @@ export default function LancamentoForm({
 
           {/* PARCELAMENTO / RECORRÊNCIA */}
 
-          <ParcelamentoRecorrencia />
+          <ParcelamentoRecorrencia 
+          onRecorrenteChange={setRecorrente}/>
 
           {/* DATA LANÇAMENTO */}
 
@@ -179,18 +194,15 @@ export default function LancamentoForm({
 
           {/* VENCIMENTO */}
 
-          {(tipoInicial === "SAIDA" ||
-            modoRecorrencia) && (
+          {exigeVencimento && (
             <>
-              <label htmlFor="dataVencimento">
-                Data de vencimento
-              </label>
-
+              <label htmlFor="dataVencimento">Data de vencimento</label>
               <input
                 id="dataVencimento"
                 type="date"
                 name="dataVencimento"
                 defaultValue={dataVencimento}
+                required 
               />
             </>
           )}
@@ -212,7 +224,7 @@ export default function LancamentoForm({
               Selecione
             </option>
 
-            {categorias.map((categoria) => (
+            {categoriasFiltradas.map((categoria) => (
               <option
                 key={categoria.id}
                 value={categoria.id}

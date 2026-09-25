@@ -155,9 +155,6 @@ export async function Novo_lancamento(
   const dados = obterDadosLancamento(formData, usuarioId);
 
   await prisma.$transaction(async (tx) => {
-    // =====================================================
-    // VALIDA CONTA PARA ENTRADA
-    // =====================================================
 
     if (dados.tipo === TipoLancamento.ENTRADA) {
       if (!dados.contaFinanceiraId) {
@@ -1780,8 +1777,6 @@ function obterDadosLancamento(
     )
     : null;
 
-
-
   const categoriaId = formData.get("categoriaId")
     ? Number(formData.get("categoriaId"))
     : null;
@@ -1795,6 +1790,12 @@ function obterDadosLancamento(
     formData.get("participanteId")
       ? Number(formData.get("participanteId"))
       : null;
+
+  const FORMAS_QUE_EXIGEM_VENCIMENTO: TipoPagamento[] = [
+    TipoPagamento.CARTAO,
+
+  ];
+  
   if (!descricao) {
     throw new Error(
       "Descrição é obrigatória."
@@ -1822,6 +1823,15 @@ function obterDadosLancamento(
         "Informe o vencimento para lançamentos parcelados."
       );
     }
+    if (
+    formaPagamento &&
+    FORMAS_QUE_EXIGEM_VENCIMENTO.includes(formaPagamento) &&
+    !dataVencimento
+    ) {
+    throw new Error(
+      "Informe o vencimento para pagamentos no cartão."
+    );
+  }
   }
 
   if (periodicidade && !dataVencimento) {

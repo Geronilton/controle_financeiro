@@ -3,9 +3,16 @@
 import { useState } from "react";
 import Styles from "../novo/page.module.css";
 
-export default function ParcelamentoRecorrencia() {
-  const [recorrente, setRecorrente] = useState(false);
+type Props = {
+ onRecorrenteChange?: (recorrente: boolean) => void;
+};
 
+export default function ParcelamentoRecorrencia({onRecorrenteChange,}:Props) {
+  const [recorrente, setRecorrente] = useState(false);
+   function alterarRecorrente(valor: boolean) {
+    setRecorrente(valor);
+    onRecorrenteChange?.(valor); 
+  }
   return (
      <>
       <label htmlFor="recorrente">
@@ -33,19 +40,15 @@ export default function ParcelamentoRecorrencia() {
             id="periodicidade"
             name="periodicidade"
             defaultValue=""
+            onChange={(e) => onRecorrenteChange?.(true)}
             required
           >
             <option value="" disabled>
               Selecione a periodicidade
             </option>
-
+            <option value="MENSAL">Mensal</option>
             <option value="DIARIA">Diária</option>
             <option value="SEMANAL">Semanal</option>
-            <option value="QUINZENAL">Quinzenal</option>
-            <option value="MENSAL">Mensal</option>
-            <option value="BIMESTRAL">Bimestral</option>
-            <option value="TRIMESTRAL">Trimestral</option>
-            <option value="SEMESTRAL">Semestral</option>
             <option value="ANUAL">Anual</option>
           </select>
         </div>

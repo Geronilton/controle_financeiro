@@ -26,6 +26,7 @@ export default function categoria(){
         >
           <option value="ENTRADA">Entrada</option>
           <option value="SAIDA">Saída</option>
+          <option value="AMBOS">Ambos (entrada e saída)</option>
         </select>
 
         <button type="submit">

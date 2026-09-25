@@ -1,5 +1,6 @@
 import { Ativar_recorrencia, Listar_recorrencias, Pausar_recorrencia } from "@/app/actions/lancamento";
 import styles from "@/app/styles/listagem.module.css";
+import { formatarData } from "../lib/formatarData";
 
 export default async function ListarRecorrencias() {
   const recorrencias = await Listar_recorrencias();
@@ -57,9 +58,7 @@ export default async function ListarRecorrencias() {
                   </td>
 
                   <td>
-                    {new Date(
-                      recorrencia.vencimento
-                    ).toLocaleDateString("pt-BR")}
+                  {formatarData(recorrencia.vencimento)}
                   </td>
 
                   <td>

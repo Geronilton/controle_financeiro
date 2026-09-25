@@ -208,9 +208,12 @@ export async function Fatura_participante(
     /*
      * Lançamento normal ou recorrente
      */
+
+    const dataReferencia = lancamento.dataVencimento ?? lancamento.dataLancamento;
+
     if (
-      lancamento.dataLancamento >= inicio &&
-      lancamento.dataLancamento < fim
+      dataReferencia >= inicio &&
+      dataReferencia < fim
     ) {
       itens.push({
         id: `lancamento-${lancamento.id}`,
@@ -220,7 +223,7 @@ export async function Fatura_participante(
         status: lancamento.status,
         numParcela: null,
         parcela: null,
-        data: lancamento.dataLancamento,
+        data: dataReferencia,
       });
     }
   }

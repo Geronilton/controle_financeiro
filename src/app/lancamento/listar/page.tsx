@@ -6,6 +6,7 @@ import {
 } from "@/app/actions/lancamento";
 import styles from "@/app/styles/listarLancamento.module.css";
 import { exigirUsuarioId } from "@/app/lib/auth";
+import { formatarData } from "@/app/lib/formatarData";
 
 type Props = {
   limite?: number;
@@ -82,9 +83,7 @@ export default async function ListarLancamento({
                   <span>Data</span>
 
                   <strong>
-                    {new Date(
-                      lancamento.dataLancamento
-                    ).toLocaleDateString("pt-BR")}
+                   {formatarData(lancamento.dataLancamento)}
                   </strong>
                 </div>
 
@@ -110,9 +109,7 @@ export default async function ListarLancamento({
                     <span>Vencimento</span>
 
                     <strong>
-                      {new Date(
-                        lancamento.dataVencimento
-                      ).toLocaleDateString("pt-BR")}
+                      {formatarData(lancamento.dataVencimento)}
                     </strong>
                   </div>
                 )}

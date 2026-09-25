@@ -7,10 +7,16 @@ import { exigirUsuarioId } from "../lib/auth";
 
 
 export async function Criar_categoria(formData: FormData){
-    const nome = formData.get("nome")?.toString() ?? "";
-    const tipo = formData.get("tipo")?.toString() as TipoLancamento;
-    const usuarioId = 1;
-
+  const nome = formData.get("nome")?.toString() ?? "";
+  const tipoRaw = formData.get("tipo")?.toString();
+  const tipo = tipoRaw === "AMBOS" ? null : (tipoRaw as TipoLancamento); 
+  const usuarioId = await exigirUsuarioId();
+  if (usuarioId === null) {
+    throw new Error("Usuário não autenticado.");
+  }
+  if (!nome) {
+  throw new Error("Nome da categoria é obrigatório.");
+  }
   try {
     await prisma.categoria.create({
     data: {
@@ -19,12 +25,13 @@ export async function Criar_categoria(formData: FormData){
       usuarioId,
     },
   });
-  revalidatePath("/categoria");
-  revalidatePath("/categoria/listar");
+
   } catch (error) {
     console.log("Erro ao criar categoria:",error);
-  
-  }
+    throw new Error("Não foi possível criar a categoria.");
+  }  
+  revalidatePath("/categoria");
+  revalidatePath("/categoria/listar");
   redirect("/categoria/listar")
 }
 

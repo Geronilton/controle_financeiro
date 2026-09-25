@@ -6,12 +6,14 @@ type Props = {
   valorInicial?: number;
   formaPagamentoInicial?: string;
   statusInicial?: string;
+  onFormaPagamentoChange?: (forma: string) => void;
 };
 
 export default function ValorLancamento({
   valorInicial,
   formaPagamentoInicial,
   statusInicial = "PAGO",
+  onFormaPagamentoChange,
 }: Props) {
   const [valor, setValor] = useState(
     valorInicial?.toString() ?? ""
@@ -33,6 +35,7 @@ export default function ValorLancamento({
     novaForma: string
   ) {
     setFormaPagamento(novaForma);
+    onFormaPagamentoChange?.(novaForma);
 
     if (
       novaForma === "PIX" ||
