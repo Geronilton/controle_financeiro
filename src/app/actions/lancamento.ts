@@ -814,6 +814,7 @@ export async function Processar_recorrencias() {
                 usuarioId: recorrencia.usuarioId,
                 categoriaId: recorrencia.categoriaId,
                 contaFinanceiraId: recorrencia.contaFinanceiraId,
+                participanteId: ultimoLancamento?.participanteId ?? null,
 
                 recorrenciaId: recorrencia.id,
               },
