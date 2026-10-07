@@ -80,17 +80,18 @@ export async function Dados_dashboard() {
       where: {
         usuarioId,
         tipo: "SAIDA",
-        status: "PENDENTE",
         OR: [
-          // Lançamento normal: vencimento próprio dentro do mês
+          // Lançamento normal: status e vencimento próprios
           {
             quantidadeParcelas: { lte: 1 },
+            status: "PENDENTE",
             dataVencimento: {
               gte: inicioMes,
               lt: fimMes,
             },
           },
-          // Lançamento parcelado: pelo menos uma parcela pendente vencendo no mês
+          // Lançamento parcelado: considera só as parcelas pendentes do mês,
+          // independente do status do lançamento pai
           {
             quantidadeParcelas: { gt: 1 },
             parcelas: {
