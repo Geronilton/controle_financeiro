@@ -49,6 +49,7 @@
   font-size: 13px;
   color: #6b7280;
   margin-bottom: 8px;
+  font-weight: 900;
 }
 
 .entradaCard strong {
@@ -95,10 +96,16 @@
 
   .resumoValores {
     grid-template-columns: 1fr 1fr;
+    gap: 8px;
   }
 
   .saldoCard strong {
     font-size: 26px;
+  }
+  .entradaCard,
+  .saidaCard {
+    padding: 18px;
+
   }
 }
 

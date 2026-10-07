@@ -36,6 +36,12 @@ export async function Dados_dashboard() {
   if (usuarioId === null) {
     throw new Error("Usuário não autenticado.");
   }
+
+  // Intervalo do mês atual
+  const agora = new Date();
+  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
+  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
+
   const [
     contasFinanceiras,
     entradas,
@@ -43,7 +49,6 @@ export async function Dados_dashboard() {
     ultimosLancamentos,
   ] = await Promise.all([
 
-    
     // Contas financeiras ativas
     prisma.contaFinanceira.findMany({
       where: {
@@ -70,17 +75,44 @@ export async function Dados_dashboard() {
       },
     }),
 
-    // Dívidas ainda não pagas
+    // Dívidas pendentes com vencimento no mês atual (qualquer participante)
     prisma.lancamento.findMany({
       where: {
         usuarioId,
         tipo: "SAIDA",
         status: "PENDENTE",
+        OR: [
+          // Lançamento normal: vencimento próprio dentro do mês
+          {
+            quantidadeParcelas: { lte: 1 },
+            dataVencimento: {
+              gte: inicioMes,
+              lt: fimMes,
+            },
+          },
+          // Lançamento parcelado: pelo menos uma parcela pendente vencendo no mês
+          {
+            quantidadeParcelas: { gt: 1 },
+            parcelas: {
+              some: {
+                status: "PENDENTE",
+                vencimento: {
+                  gte: inicioMes,
+                  lt: fimMes,
+                },
+              },
+            },
+          },
+        ],
       },
       include: {
         parcelas: {
           where: {
             status: "PENDENTE",
+            vencimento: {
+              gte: inicioMes,
+              lt: fimMes,
+            },
           },
         },
       },
@@ -98,42 +130,27 @@ export async function Dados_dashboard() {
     }),
   ]);
 
-  // Saldo atual = soma dos saldos das contas ativas
   const saldo = contasFinanceiras.reduce(
-    (total, conta) =>
-      total + Number(conta.saldo),
+    (total, conta) => total + Number(conta.saldo),
     0
   );
 
-  const totalEntradas = Number(
-    entradas._sum.valorPago ?? 0
-  );
+  const totalEntradas = Number(entradas._sum.valorPago ?? 0);
 
-  // Calcula o valor das dívidas pendentes
-  const totalDividas = dividas.reduce(
-    (total, lancamento) => {
-      // Lançamento parcelado
-      if (lancamento.quantidadeParcelas > 1) {
-        const valorParcelasPendentes =
-          lancamento.parcelas.reduce(
-            (subtotal, parcela) =>
-              subtotal +
-              Number(parcela.valorParcela),
-            0
-          );
+  const totalDividas = dividas.reduce((total, lancamento) => {
+    if (lancamento.quantidadeParcelas > 1) {
+      const valorParcelasPendentes = lancamento.parcelas.reduce(
+        (subtotal, parcela) => subtotal + Number(parcela.valorParcela),
+        0
+      );
+      return total + valorParcelasPendentes;
+    }
 
-        return total + valorParcelasPendentes;
-      }
+    const valorPendente =
+      Number(lancamento.valor) - Number(lancamento.valorPago);
 
-      // Lançamento normal
-      const valorPendente =
-        Number(lancamento.valor) -
-        Number(lancamento.valorPago);
-
-      return total + Math.max(valorPendente, 0);
-    },
-    0
-  );
+    return total + Math.max(valorPendente, 0);
+  }, 0);
 
   return {
     saldo,

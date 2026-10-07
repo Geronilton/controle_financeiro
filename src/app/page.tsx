@@ -56,6 +56,8 @@ export default async function Home({
 
 
   const hoje = new Date();
+  const nomeMesAtual = hoje.toLocaleDateString("pt-BR", { month: "long" });
+  const nomeMesFormatado = nomeMesAtual.charAt(0).toUpperCase() + nomeMesAtual.slice(1);
 
   return (
     <main className={styles.container}>
@@ -106,7 +108,7 @@ export default async function Home({
 
 
           <div className={styles.saidaCard}>
-            <span>Saídas</span>
+            <span>Saídas de {nomeMesFormatado}</span>
 
             <strong>
               - R${" "}
