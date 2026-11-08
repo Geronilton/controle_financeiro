@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# controle-financeiro
 
-## Getting Started
+> Sistema de controle financeiro pessoal para gerenciar despesas, 
+> parcelamentos e dívidas compartilhadas, com visão organizada por mês.
 
-First, run the development server:
+## 🎯 Sobre
 
-```bash
+Aplicação full-stack para controle financeiro pessoal, com foco em 
+despesas parceladas e dívidas que envolvem mais de uma pessoa — 
+permitindo associar participantes a uma dívida e acompanhar o que 
+cada um deve, mês a mês.
+
+## ✨ Funcionalidades
+
+- Registro de despesas, incluindo parcelamento
+- Associação de participantes a uma dívida (divisão de gastos compartilhados)
+- Registro de entradas (receitas)
+- Visualização das dívidas organizadas por mês
+- Geração de dividas recorrentes automaticamente de acordo com a periodicidade informada. 
+
+## 🛠️ Tecnologias
+
+- [Next.js](https://nextjs.org/) 16
+- [React](https://react.dev/) 19
+- [Prisma ORM](https://www.prisma.io/) 7 com `@prisma/adapter-pg`
+- [PostgreSQL](https://www.postgresql.org/)
+- Deploy: [Vercel](https://vercel.com/) + [Neon](https://neon.tech/)
+
+## 🔐 Arquitetura
+
+- Autenticação baseada em sessão
+
+## 🚀 Como rodar
+
+\`\`\`bash
+# clonar o repositório
+git clone https://github.com/Geronilton/controle_financeiro
+
+# instalar dependências
+npm install
+
+# configurar variáveis de ambiente
+cp .env.example .env
+
+# rodar migrations
+npx prisma migrate dev
+
+# iniciar em desenvolvimento
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+\`\`\`
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 📌 Status
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Em produção, uso pessoal.
