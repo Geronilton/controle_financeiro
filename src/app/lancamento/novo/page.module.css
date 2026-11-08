@@ -4,15 +4,16 @@
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  background: #f5f6f8;
+  background: var(--mireis-fundo-suave);
 }
 
 .card {
   width: 100%;
   max-width: 520px;
-  background: #ffffff;
+  background: var(--mireis-branco);
   padding: 32px;
   border-radius: 14px;
+  border: 1px solid var(--mireis-borda);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
 }
 
@@ -20,7 +21,7 @@
   margin: 0 0 28px;
   font-size: 24px;
   font-weight: 600;
-  color: #222;
+  color: var(--mireis-texto);
 }
 
 .card form {
@@ -33,7 +34,7 @@
   margin-top: 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #444;
+  color: var(--mireis-texto);
 }
 
 .card input,
@@ -41,23 +42,23 @@
   width: 100%;
   box-sizing: border-box;
   padding: 12px 14px;
-  border: 1px solid #d7dbe0;
+  border: 1px solid var(--mireis-borda-forte);
   border-radius: 8px;
-  background: #fff;
+  background: var(--mireis-branco);
   font-size: 15px;
-  color: #222;
+  color: var(--mireis-texto);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .card input:focus,
 .card select:focus {
-  border-color: #555;
-  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+  border-color: var(--mireis-dourado);
+  box-shadow: 0 0 0 3px rgba(198, 161, 91, 0.25);
 }
 
 .card input::placeholder {
-  color: #999;
+  color: var(--mireis-texto-suave);
 }
 
 .card button {
@@ -65,8 +66,8 @@
   padding: 13px 18px;
   border: none;
   border-radius: 8px;
-  background: #222;
-  color: #fff;
+  background: var(--mireis-grafite);
+  color: var(--mireis-creme);
   font-size: 15px;
   font-weight: 600;
   cursor: pointer;
@@ -74,7 +75,7 @@
 }
 
 .card button:hover {
-  background: #333;
+  background: var(--mireis-grafite-hover);
 }
 
 .card button:active {

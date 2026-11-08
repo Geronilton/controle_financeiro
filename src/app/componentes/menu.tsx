@@ -35,7 +35,7 @@ export default function Menu() {
       >
         <div className={styles.menuHeader}>
           <div>
-            <strong>Fluxo de Caixa</strong>
+            <strong>MiReis</strong>
             <span>Controle financeiro</span>
           </div>
 

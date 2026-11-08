@@ -137,12 +137,7 @@ export default async function Fatura({
 
       <header className={styles.header}>
         <div>
-          <span className={styles.eyebrow}>
-            CONTROLE FINANCEIRO
-          </span>
-
           <h1>Faturas</h1>
-
           <p>
             Acompanhe os gastos por participante
             e por mês.

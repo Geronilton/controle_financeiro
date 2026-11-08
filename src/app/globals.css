@@ -3,7 +3,41 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Paleta MiReis */
+  --mireis-verde: #174C3C;
+  --mireis-creme: #F5F0E4;
+  --mireis-dourado: #C6A15B;
+  --mireis-dourado-escuro: #8C6A32;
+  --mireis-grafite: #242B27;
+  --mireis-grafite-hover: #30403A;
+
+  /* Vermelho (saídas / dívidas / ações destrutivas) */
+  --mireis-vermelho: #A5443A;
+  --mireis-vermelho-escuro: #7A2F27;
+  --mireis-vermelho-claro: #FEF2F2;
+  --mireis-vermelho-borda: #FECACA;
+
+  /* Verde (entradas / sucesso) */
+  --mireis-verde-claro: #EFF6EF;
+  --mireis-verde-borda: #BEE0CD;
+
+  --mireis-branco: #FFFFFF;
+
+  /* Texto */
+  --mireis-texto: var(--mireis-grafite);
+  --mireis-texto-secundario: rgba(36, 43, 39, 0.65);
+  --mireis-texto-suave: rgba(36, 43, 39, 0.45);
+
+  /* Bordas e fundos neutros */
+  --mireis-borda: rgba(23, 76, 60, 0.14);
+  --mireis-borda-suave: rgba(23, 76, 60, 0.08);
+  --mireis-borda-forte: rgba(23, 76, 60, 0.24);
+  --mireis-fundo-suave: #F3F3F1;
+
+  --mireis-overlay: rgba(36, 43, 39, 0.45);
 }
+
 
 @theme inline {
   --color-background: var(--background);

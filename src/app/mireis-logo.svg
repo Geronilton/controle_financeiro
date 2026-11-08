@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="MiReis">
+  <rect width="512" height="512" fill="#174C3C"/>
+
+  <g transform="translate(-7 0)" fill="#FFFFFF">
+    <!-- M: a última perna (x 250–294) é a haste do R -->
+    <path d="M96 372 V140 H146 L195 260 L244 140 H294 V372 H250 V222 L212 314 H178 L140 222 V372 Z"/>
+
+    <!-- R: bojo -->
+    <path d="M272 162 H344 a54 54 0 0 1 0 108 H272" fill="none" stroke="#FFFFFF" stroke-width="44"/>
+
+    <!-- R: perna -->
+    <path d="M304 262 H356 L430 372 H376 Z"/>
+  </g>
+
+  <!-- corte diagonal (barra de gráfico) -->
+  <path d="M40 358 L480 151" stroke="#174C3C" stroke-width="14" fill="none"/>
+</svg>

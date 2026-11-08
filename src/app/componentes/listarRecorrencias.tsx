@@ -78,7 +78,7 @@ export default async function ListarRecorrencias() {
                         >
                           <button
                             type="submit"
-                            className={styles.apagar}
+                            className={styles.deleteButton}
                           >
                             Pausar
                           </button>
@@ -92,7 +92,7 @@ export default async function ListarRecorrencias() {
                         >
                           <button
                             type="submit"
-                            className={styles.editar}
+                            className={styles.editButton}
                           >
                             Ativar
                           </button>

@@ -15,18 +15,18 @@
 .header h2 {
   margin: 0;
   font-size: 24px;
-  color: #1f2937;
+  color: var(--mireis-texto);
 }
 
 .header p {
   margin: 5px 0 0;
-  color: #6b7280;
+  color: var(--mireis-texto-secundario);
   font-size: 14px;
 }
 
 .total {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--mireis-fundo-suave);
+  color: var(--mireis-texto-secundario);
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
@@ -39,8 +39,8 @@
 .tableWrapper {
   width: 100%;
   overflow-x: auto;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--mireis-branco);
+  border: 1px solid var(--mireis-borda);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
@@ -51,7 +51,7 @@
 }
 
 .table thead {
-  background: #f9fafb;
+  background: var(--mireis-fundo-suave);
 }
 
 .table th {
@@ -59,17 +59,17 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--mireis-texto-secundario);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--mireis-borda);
 }
 
 .table td {
   padding: 16px 18px;
   font-size: 14px;
-  color: #374151;
-  border-bottom: 1px solid #f3f4f6;
+  color: var(--mireis-texto);
+  border-bottom: 1px solid var(--mireis-borda-suave);
 }
 
 .table tbody tr:last-child td {
@@ -81,7 +81,7 @@
 }
 
 .table tbody tr:hover {
-  background: #f9fafb;
+  background: var(--mireis-fundo-suave);
 }
 
 /* =========================
@@ -99,18 +99,18 @@
 }
 
 .badgeEntrada {
-  background: #dcfce7;
-  color: #15803d;
+  background: var(--mireis-verde-claro);
+  color: var(--mireis-verde);
 }
 
 .badgeSaida {
-  background: #fee2e2;
-  color: #b91c1c;
+  background: var(--mireis-vermelho-claro);
+  color: var(--mireis-vermelho);
 }
 
 .neutro {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: var(--mireis-fundo-suave);
+  color: var(--mireis-texto-secundario);
 }
 
 /* =========================
@@ -129,9 +129,9 @@
   justify-content: center;
   padding: 7px 11px;
   border-radius: 7px;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  color: #374151;
+  border: 1px solid var(--mireis-borda-forte);
+  background: var(--mireis-branco);
+  color: var(--mireis-texto);
   font-size: 13px;
   text-decoration: none;
   cursor: pointer;
@@ -139,22 +139,22 @@
 }
 
 .editButton:hover {
-  background: #f3f4f6;
+  background: var(--mireis-fundo-suave);
 }
 
 .deleteButton {
   padding: 7px 11px;
   border-radius: 7px;
-  border: 1px solid #fecaca;
-  background: #fff;
-  color: #dc2626;
+  border: 1px solid var(--mireis-vermelho-borda);
+  background: var(--mireis-branco);
+  color: var(--mireis-vermelho);
   font-size: 13px;
   cursor: pointer;
   transition: 0.15s ease;
 }
 
 .deleteButton:hover {
-  background: #fef2f2;
+  background: var(--mireis-vermelho-claro);
 }
 
 /* =========================
@@ -168,8 +168,8 @@
   padding: 9px 14px;
   border: none;
   border-radius: 8px;
-  background: #111827;
-  color: #fff;
+  background: var(--mireis-grafite);
+  color: var(--mireis-creme);
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
@@ -178,7 +178,7 @@
 }
 
 .newButton:hover {
-  background: #1f2937;
+  background: var(--mireis-grafite-hover);
 }
 
 /* =========================
@@ -188,7 +188,7 @@
 .empty {
   padding: 40px 20px !important;
   text-align: center;
-  color: #9ca3af !important;
+  color: var(--mireis-texto-suave) !important;
 }
 
 /* =========================
@@ -196,8 +196,8 @@
 ========================= */
 
 .card {
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: var(--mireis-branco);
+  border: 1px solid var(--mireis-borda);
   border-left: 4px solid;
   border-radius: 12px;
   padding: 20px;
@@ -213,11 +213,11 @@
 }
 
 .cardEntrada {
-  border-left-color: #16a34a;
+  border-left-color: var(--mireis-verde);
 }
 
 .cardSaida {
-  border-left-color: #dc2626;
+  border-left-color: var(--mireis-vermelho);
 }
 
 /* =========================

@@ -9,12 +9,12 @@
 .header h2 {
   margin: 0;
   font-size: 20px;
-  color: #1f2937;
+  color: var(--mireis-texto);
 }
 
 .header p {
   margin: 4px 0 0;
-  color: #6b7280;
+  color: var(--mireis-texto-secundario);
   font-size: 13px;
 }
 
@@ -28,10 +28,10 @@
 .participante {
   min-width: 100px;
   padding: 14px 18px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--mireis-borda);
   border-radius: 10px;
-  background: #fff;
-  color: #374151;
+  background: var(--mireis-branco);
+  color: var(--mireis-texto);
   text-decoration: none;
 
   display: flex;
@@ -43,18 +43,18 @@
 }
 
 .participante:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: var(--mireis-fundo-suave);
+  border-color: var(--mireis-borda-forte);
 }
 
 .selecionado {
-  background: #111827;
-  color: #fff;
-  border-color: #111827;
+  background: var(--mireis-grafite);
+  color: var(--mireis-creme);
+  border-color: var(--mireis-grafite);
 }
 
 .selecionado:hover {
-  background: #1f2937;
+  background: var(--mireis-grafite-hover);
 }
 
 .icone {

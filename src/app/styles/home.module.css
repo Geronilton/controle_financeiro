@@ -1,3 +1,9 @@
+.logo {
+  display: block;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
 .resumo {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
@@ -6,8 +12,8 @@
 }
 
 .saldoCard {
-  background: #111827;
-  color: #fff;
+  background: var(--mireis-grafite);
+  color: var(--mireis-creme);
   border-radius: 14px;
   padding: 24px;
   display: flex;
@@ -35,8 +41,8 @@
 
 .entradaCard,
 .saidaCard {
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--mireis-branco);
+  border: 1px solid var(--mireis-borda);
   border-radius: 14px;
   padding: 20px;
   display: flex;
@@ -47,18 +53,18 @@
 .entradaCard span,
 .saidaCard span {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--mireis-texto-secundario);
   margin-bottom: 8px;
   font-weight: 900;
 }
 
 .entradaCard strong {
-  color: #15803d;
+  color: var(--mireis-verde);
   font-size: 20px;
 }
 
 .saidaCard strong {
-  color: #b91c1c;
+  color: var(--mireis-vermelho);
   font-size: 20px;
 }
 
@@ -75,12 +81,12 @@
 
 .tituloSecao h2 {
   margin: 0;
-  color: #1f2937;
+  color: var(--mireis-texto);
   font-size: 20px;
 }
 
 .tituloSecao a {
-  color: #374151;
+  color: var(--mireis-texto-secundario);
   font-size: 13px;
   text-decoration: none;
 }
@@ -105,7 +111,6 @@
   .entradaCard,
   .saidaCard {
     padding: 18px;
-
   }
 }
 
@@ -123,16 +128,14 @@
 .header h1 {
   margin: 0;
   font-size: 28px;
-  color: #1f2937;
+  color: var(--mireis-texto);
 }
 
 .header p {
   margin: 6px 0 0;
-  color: #6b7280;
+  color: var(--mireis-texto-secundario);
   font-size: 14px;
 }
-
-/* AÇÕES RÁPIDAS */
 
 .quickActions {
   display: grid;
@@ -145,13 +148,9 @@
   display: flex;
   align-items: center;
   gap: 14px;
-
   padding: 20px;
-
   border-radius: 12px;
-
   text-decoration: none;
-
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
@@ -161,51 +160,39 @@
   transform: translateY(-2px);
 }
 
-/* ÍCONE */
-
 .icon {
   display: flex;
   align-items: center;
   justify-content: center;
-
   width: 42px;
   height: 42px;
-
   flex-shrink: 0;
-
   border-radius: 10px;
-
   font-size: 25px;
   font-weight: 400;
 }
 
-/* DÍVIDA */
-
 .divida {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #b91c1c;
+  background: var(--mireis-vermelho-claro);
+  border: 1px solid var(--mireis-vermelho-borda);
+  color: var(--mireis-vermelho);
 }
 
 .divida .icon {
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--mireis-vermelho-borda);
+  color: var(--mireis-vermelho);
 }
 
-/* ENTRADA */
-
 .entrada {
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  color: #1d4ed8;
+  background: var(--mireis-verde-claro);
+  border: 1px solid var(--mireis-verde-borda);
+  color: var(--mireis-verde);
 }
 
 .entrada .icon {
-  background: #dbeafe;
-  color: #2563eb;
+  background: var(--mireis-verde-borda);
+  color: var(--mireis-verde);
 }
-
-/* TEXTOS */
 
 .actionButton div {
   display: flex;
@@ -222,25 +209,21 @@
   opacity: 0.75;
 }
 
-/* LINKS */
-
 .links {
   display: flex;
   gap: 20px;
 }
 
 .links a {
-  color: #4b5563;
+  color: var(--mireis-texto-secundario);
   font-size: 14px;
   text-decoration: none;
 }
 
 .links a:hover {
-  color: #111827;
+  color: var(--mireis-texto);
   text-decoration: underline;
 }
-
-/* MOBILE */
 
 @media (max-width: 700px) {
   .container {

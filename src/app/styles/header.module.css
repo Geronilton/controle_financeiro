@@ -1,21 +1,16 @@
 .header {
   position: sticky;
   top: 0;
-
   height: 68px;
-
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   padding: 0 24px;
-
-  background: #ffffff;
-
-  border-bottom: 1px solid #e5e7eb;
-
+  background: var(--mireis-branco);
+  border-bottom: 1px solid var(--mireis-borda);
   z-index: 100;
 }
+
 .left {
   display: flex;
   align-items: center;
@@ -29,12 +24,12 @@
 }
 
 .brand strong {
-  color: #111827;
+  color: var(--mireis-grafite);
   font-size: 16px;
 }
 
 .brand span {
-  color: #9ca3af;
+  color: var(--mireis-texto-suave);
   font-size: 11px;
 }
 
@@ -52,16 +47,12 @@
 .avatar {
   width: 36px;
   height: 36px;
-
   display: flex;
   align-items: center;
   justify-content: center;
-
   border-radius: 50%;
-
-  background: #f3f4f6;
-  color: #374151;
-
+  background: var(--mireis-dourado);
+  color: var(--mireis-grafite);
   font-size: 14px;
   font-weight: 700;
 }
@@ -73,12 +64,12 @@
 }
 
 .userInfo strong {
-  color: #374151;
+  color: var(--mireis-texto);
   font-size: 13px;
 }
 
 .userInfo span {
-  color: #9ca3af;
+  color: var(--mireis-texto-suave);
   font-size: 11px;
 }
 

@@ -4,8 +4,11 @@ import Footer from "./componentes/footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Fluxo de Caixa",
-  description: "Controle financeiro simples para seu negócio",
+  title: "MiReis",
+  description: "'Observar, estudar e registrar são os primeiros passos para melhorar'",
+  icons: {
+    icon: "/mireis-logo.svg",
+  },
 };
 
 export default function RootLayout({

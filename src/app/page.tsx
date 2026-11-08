@@ -62,13 +62,6 @@ export default async function Home({
   return (
     <main className={styles.container}>
 
-      <section className={styles.header}>
-        <div>
-          <p>
-            Controle suas movimentações financeiras.
-          </p>
-        </div>
-      </section>
 
 
       {/* RESUMO */}

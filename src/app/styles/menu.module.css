@@ -1,39 +1,29 @@
 .menuButton {
   width: 42px;
   height: 42px;
-
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-
   gap: 5px;
-
   padding: 0;
-
   border: none;
   border-radius: 9px;
-
   background: transparent;
-
   cursor: pointer;
-
   position: relative;
   z-index: 200;
 }
 
 .menuButton:hover {
-  background: #f3f4f6;
+  background: var(--mireis-fundo-suave);
 }
 
 .menuButton span {
   display: block;
-
   width: 21px;
   height: 2px;
-
-  background: #374151;
-
+  background: var(--mireis-texto);
   border-radius: 2px;
 }
 
@@ -41,16 +31,11 @@
 
 .overlay {
   position: fixed;
-
   inset: 0;
-
   z-index: 9998;
-
-  background: rgba(0, 0, 0, 0.35);
-
+  background: var(--mireis-overlay);
   opacity: 0;
   visibility: hidden;
-
   transition:
     opacity 0.25s ease,
     visibility 0.25s ease;
@@ -65,24 +50,16 @@
 
 .menu {
   position: fixed;
-
   top: 0;
   left: 0;
-
   width: 280px;
   height: 100dvh;
-
   z-index: 9999;
-
   display: flex;
   flex-direction: column;
-
-  background: #ffffff;
-
+  background: var(--mireis-branco);
   box-shadow: 8px 0 30px rgba(0, 0, 0, 0.12);
-
   transform: translateX(-100%);
-
   transition: transform 0.25s ease;
 }
 
@@ -96,47 +73,39 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-
   padding: 22px 20px;
-
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--mireis-borda);
 }
 
 .menuHeader div {
   display: flex;
   flex-direction: column;
-
   gap: 3px;
 }
 
 .menuHeader strong {
-  color: #111827;
+  color: var(--mireis-grafite);
   font-size: 17px;
 }
 
 .menuHeader span {
-  color: #9ca3af;
+  color: var(--mireis-texto-suave);
   font-size: 12px;
 }
 
 .closeButton {
   width: 36px;
   height: 36px;
-
   border: none;
   border-radius: 8px;
-
-  background: #f3f4f6;
-
-  color: #4b5563;
-
+  background: var(--mireis-fundo-suave);
+  color: var(--mireis-texto-secundario);
   font-size: 24px;
-
   cursor: pointer;
 }
 
 .closeButton:hover {
-  background: #e5e7eb;
+  background: var(--mireis-borda-suave);
 }
 
 /* LINKS */
@@ -144,74 +113,56 @@
 .nav {
   display: flex;
   flex-direction: column;
-
   gap: 4px;
-
   padding: 18px 12px;
 }
 
 .nav a {
   display: flex;
   align-items: center;
-
   gap: 13px;
-
   padding: 12px 14px;
-
   border-radius: 8px;
-
-  color: #4b5563;
-
+  color: var(--mireis-texto-secundario);
   font-size: 14px;
   font-weight: 500;
-
   text-decoration: none;
 }
 
 .nav a:hover {
-  background: #f3f4f6;
-
-  color: #111827;
+  background: var(--mireis-fundo-suave);
+  color: var(--mireis-grafite);
 }
 
 .nav a span {
   width: 22px;
-
   text-align: center;
-
-  color: #6b7280;
-
+  color: var(--mireis-texto-secundario);
   font-size: 17px;
 }
 
 .divider {
   height: 1px;
-
   margin: 12px 8px;
-
-  background: #e5e7eb;
+  background: var(--mireis-borda);
 }
 
 /* RODAPÉ */
 
 .menuFooter {
   margin-top: auto;
-
   display: flex;
   justify-content: space-between;
-
   padding: 18px 20px;
-
-  border-top: 1px solid #e5e7eb;
-
-  color: #9ca3af;
-
+  border-top: 1px solid var(--mireis-borda);
+  color: var(--mireis-texto-suave);
   font-size: 12px;
 }
 
 .menuFooter small {
-  color: #d1d5db;
+  color: var(--mireis-borda-forte);
 }
+
 .botaoSair {
   width: 100%;
   display: flex;
@@ -219,17 +170,13 @@
   gap: 10px;
   padding: 12px 16px;
   margin-top: 8px;
-
   border: none;
   border-radius: 8px;
-
   background: transparent;
-  color: #b91c1c;
-
+  color: var(--mireis-vermelho);
   font-size: 14px;
   font-weight: 600;
   text-align: left;
-
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -237,10 +184,10 @@
 }
 
 .botaoSair:hover {
-  background: #fef2f2;
-  color: #991b1b;
+  background: var(--mireis-vermelho-claro);
+  color: var(--mireis-vermelho-escuro);
 }
 
 .botaoSair:active {
-  background: #fee2e2;
+  background: var(--mireis-vermelho-borda);
 }

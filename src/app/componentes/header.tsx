@@ -1,5 +1,6 @@
 import Menu from "@/app/componentes/menu";
 import styles from "@/app/styles/header.module.css";
+import Image from "next/image";
 import Link from "next/link";
 
 export default function Header() {
@@ -7,10 +8,17 @@ export default function Header() {
     <header className={styles.header}>
       <div className={styles.left}>
         <Menu />
-
+          <Image
+            src="/mireis-logo.svg"
+            alt="MiReis"
+            width={36}
+            height={36}
+            className={styles.logo}
+            priority
+          />
         <div className={styles.brand}>
            <Link href="/">
-            <strong>Fluxo de Caixa</strong>
+            <strong>MiReis</strong>
             <br />
             <span>Controle financeiro</span>
           </Link>

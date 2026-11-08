@@ -177,7 +177,7 @@ export default function SeletorFatura({
       </div>
 
       <div className={styles.ano}>
-        {ano}
+        <span> {ano}</span>
       </div>
 
     </div>
