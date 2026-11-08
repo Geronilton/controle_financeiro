@@ -4,11 +4,16 @@ import { useState } from "react";
 import Styles from "../novo/page.module.css";
 
 type Props = {
- onRecorrenteChange?: (recorrente: boolean) => void;
+  onRecorrenteChange?: (recorrente: boolean) => void;
+  recorrenteInicial?: boolean;       
+  periodicidadeInicial?: string; 
 };
 
-export default function ParcelamentoRecorrencia({onRecorrenteChange,}:Props) {
-  const [recorrente, setRecorrente] = useState(false);
+export default function ParcelamentoRecorrencia({onRecorrenteChange,
+  recorrenteInicial = false,
+  periodicidadeInicial = "",
+}:Props) {
+  const [recorrente, setRecorrente] = useState(recorrenteInicial);
    function alterarRecorrente(valor: boolean) {
     setRecorrente(valor);
     onRecorrenteChange?.(valor); 
@@ -39,7 +44,7 @@ export default function ParcelamentoRecorrencia({onRecorrenteChange,}:Props) {
           <select
             id="periodicidade"
             name="periodicidade"
-            defaultValue=""
+            defaultValue={periodicidadeInicial} 
             onChange={(e) => onRecorrenteChange?.(true)}
             required
           >

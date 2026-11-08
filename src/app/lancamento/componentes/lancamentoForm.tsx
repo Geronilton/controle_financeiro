@@ -176,7 +176,9 @@ export default function LancamentoForm({
           {/* PARCELAMENTO / RECORRÊNCIA */}
 
           <ParcelamentoRecorrencia 
-          onRecorrenteChange={setRecorrente}/>
+            onRecorrenteChange={setRecorrente}
+            recorrenteInicial={modoRecorrencia || !!periodicidade} // 👈 novo
+            periodicidadeInicial={periodicidade ?? ""} />
 
           {/* DATA LANÇAMENTO */}
 
