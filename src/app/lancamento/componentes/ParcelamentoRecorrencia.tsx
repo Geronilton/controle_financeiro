@@ -60,7 +60,7 @@ export default function ParcelamentoRecorrencia({onRecorrenteChange,
       ) : (
         <>
           <label htmlFor="quantidadeParcelas">
-            Quantidade de Parcelas
+            Quantidade de parcelas
           </label>
 
           <input

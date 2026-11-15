@@ -7,6 +7,7 @@ type Props = {
   formaPagamentoInicial?: string;
   statusInicial?: string;
   onFormaPagamentoChange?: (forma: string) => void;
+  forcarPendenteCartao?: boolean;
 };
 
 export default function ValorLancamento({
@@ -14,42 +15,44 @@ export default function ValorLancamento({
   formaPagamentoInicial,
   statusInicial = "PAGO",
   onFormaPagamentoChange,
+  forcarPendenteCartao = false,
 }: Props) {
-  const [valor, setValor] = useState(
-    valorInicial?.toString() ?? ""
-  );
-
+  const [valor, setValor] = useState(valorInicial?.toString() ?? "");
   const [formaPagamento, setFormaPagamento] = useState(
     formaPagamentoInicial ?? ""
   );
-
-  const [status, setStatus] = useState(
-    statusInicial
-  );
+  const [status, setStatus] = useState(statusInicial);
 
   const pagamentoImediato =
-    formaPagamento === "PIX" ||
-    formaPagamento === "DINHEIRO";
+    formaPagamento === "PIX" || formaPagamento === "DINHEIRO";
 
-  function alterarFormaPagamento(
-    novaForma: string
-  ) {
+  const cartaoPendenteFixo =
+    forcarPendenteCartao && formaPagamento === "CARTAO";
+
+  // Status que realmente será enviado
+  const statusTravado = pagamentoImediato || cartaoPendenteFixo;
+  const statusEfetivo = pagamentoImediato
+    ? "PAGO"
+    : cartaoPendenteFixo
+      ? "PENDENTE"
+      : status;
+
+  function alterarFormaPagamento(novaForma: string) {
     setFormaPagamento(novaForma);
     onFormaPagamentoChange?.(novaForma);
 
-    if (
-      novaForma === "PIX" ||
-      novaForma === "DINHEIRO"
-    ) {
+    if (novaForma === "PIX" || novaForma === "DINHEIRO") {
       setStatus("PAGO");
+    }
+
+    if (forcarPendenteCartao && novaForma === "CARTAO") {
+      setStatus("PENDENTE");
     }
   }
 
   return (
     <>
-      <label htmlFor="valor">
-        Valor
-      </label>
+      <label htmlFor="valor">Valor</label>
 
       <input
         id="valor"
@@ -58,89 +61,59 @@ export default function ValorLancamento({
         step="0.01"
         min="0"
         value={valor}
-        onChange={(e) =>
-          setValor(e.target.value)
-        }
+        onChange={(e) => setValor(e.target.value)}
         required
       />
 
-      <label htmlFor="formaPagamento">
-        Forma de pagamento
-      </label>
+      <label htmlFor="formaPagamento">Forma de pagamento</label>
 
       <select
         id="formaPagamento"
         name="formaPagamento"
         value={formaPagamento}
-        onChange={(e) =>
-          alterarFormaPagamento(e.target.value)
-        }
+        onChange={(e) => alterarFormaPagamento(e.target.value)}
       >
-        <option value="">
-          Selecione
-        </option>
-
-        <option value="PIX">
-          PIX
-        </option>
-
-        <option value="DINHEIRO">
-          Dinheiro
-        </option>
-
-        <option value="CARTAO">
-          Cartão
-        </option>
-
-        <option value="TRANSFERENCIA">
-          Transferência
-        </option>
+        <option value="">Selecione</option>
+        <option value="PIX">PIX</option>
+        <option value="DINHEIRO">Dinheiro</option>
+        <option value="CARTAO">Cartão</option>
+        <option value="TRANSFERENCIA">Transferência</option>
       </select>
 
       {/* STATUS */}
-      <label htmlFor="status">
-        Status
-      </label>
+      <label htmlFor="status">Status</label>
 
-      {pagamentoImediato ? (
+      {statusTravado ? (
         <>
           <input
+            id="status"
             type="text"
-            value="Pago"
+            value={statusEfetivo === "PAGO" ? "Pago" : "Pendente"}
             disabled
           />
-
-          <input
-            type="hidden"
-            name="status"
-            value="PAGO"
-          />
+          <input type="hidden" name="status" value={statusEfetivo} />
         </>
       ) : (
         <select
           id="status"
           name="status"
           value={status}
-          onChange={(e) =>
-            setStatus(e.target.value)
-          }
+          onChange={(e) => setStatus(e.target.value)}
           required
         >
-          <option value="PENDENTE">
-            Pendente
-          </option>
-          <option value="PAGO">
-            Pago
-          </option>
+          <option value="PENDENTE">Pendente</option>
+          <option value="PAGO">Pago</option>
         </select>
       )}
 
-      {/* VALOR PAGO */}
-      {pagamentoImediato && (
+      {cartaoPendenteFixo && (
+        <small>Compras no cartão entram na fatura e ficam pendentes.</small>
+      )}
+
+      {/* VALOR PAGO: enviado sempre que o status efetivo é Pago */}
+      {statusEfetivo === "PAGO" && (
         <>
-          <label htmlFor="valorPago">
-            Valor pago
-          </label>
+          <label htmlFor="valorPago">Valor pago</label>
 
           <input
             id="valorPago"

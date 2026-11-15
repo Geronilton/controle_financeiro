@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { prisma } from "../lib/prisma";
 import { exigirUsuarioId } from "../lib/auth";
+import { lerDiasDaFatura } from "../lib/vencimento";
 
 
 export async function Nova_conta_financeira(formData: FormData) {
@@ -13,12 +14,10 @@ export async function Nova_conta_financeira(formData: FormData) {
   const saldoInicial = Number(
     formData.get("saldoInicial") ?? 0
   );
-  const objetivoRaw = formData.get("objetivo")?.toString();
-  const objetivo =
-    objetivoRaw && objetivoRaw !== ""
-      ? Number(objetivoRaw)
-      : null;
+  const objetivo = Number(formData.get("objetivo") ?? 0);
   const usuarioId = await exigirUsuarioId();
+  const { diaFechamento, diaVencimento } = lerDiasDaFatura(formData) || null;
+
   if (usuarioId === null) {
     throw new Error("Usuário não autenticado.");
   }
@@ -31,7 +30,7 @@ export async function Nova_conta_financeira(formData: FormData) {
     throw new Error("O saldo inicial não pode ser negativo.");
   }
 
-  if (objetivo !== null && objetivo < 0) {
+  if ( objetivo < 0) {
     throw new Error("O objetivo não pode ser negativo.");
   }
 
@@ -39,8 +38,11 @@ export async function Nova_conta_financeira(formData: FormData) {
     const conta = await tx.contaFinanceira.create({
       data: {
         nome,
+        saldo: saldoInicial,
         descricao,
         objetivo,
+        diaFechamento,
+        diaVencimento, 
         usuarioId,
       },
     });
@@ -121,7 +123,10 @@ export async function Editar_conta_financeira(
   const objetivo = objetivoString
     ? Number(objetivoString)
     : null;
-
+  if (objetivo !== null && (!Number.isFinite(objetivo) || objetivo < 0)) {
+    throw new Error("O objetivo deve ser um valor válido e não negativo.");
+  }
+  const { diaFechamento, diaVencimento } = lerDiasDaFatura(formData);
 
   const conta =
     await prisma.contaFinanceira.findFirst({
@@ -146,6 +151,8 @@ export async function Editar_conta_financeira(
       nome,
       descricao: descricao || null,
       objetivo,
+      diaFechamento, 
+      diaVencimento,
     },
   });
 
@@ -182,6 +189,22 @@ export async function Excluir_conta_financeira(
       "Conta financeira não encontrada."
     );
   }
+  const pendentes = await prisma.lancamento.count({
+  where: {
+    contaFinanceiraId: id,
+    usuarioId,
+    OR: [
+      { status: "PENDENTE" },
+      { parcelas: { some: { status: "PENDENTE" } } },
+    ],
+  },
+});
+
+  if (pendentes > 0) {
+    throw new Error(
+      "Esta conta tem lançamentos pendentes. Quite ou mova antes de desativar."
+    );
+  }
 
   const quantidadeLancamentos =
     await prisma.lancamento.count({
@@ -204,6 +227,7 @@ export async function Excluir_conta_financeira(
     await prisma.contaFinanceira.update({
       where: {
         id,
+        usuarioId 
       },
       data: {
         ativo: false,
@@ -213,6 +237,7 @@ export async function Excluir_conta_financeira(
     await prisma.contaFinanceira.delete({
       where: {
         id,
+        usuarioId 
       },
     });
   }

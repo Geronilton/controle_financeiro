@@ -4,6 +4,7 @@ import { useState } from "react";
 import Styles from "../novo/page.module.css";
 import ParcelamentoRecorrencia from "./ParcelamentoRecorrencia";
 import ValorLancamento from "./ValorLancamento";
+import { calcularVencimento } from "../../lib/vencimento"; // ajuste o caminho se necessário
 
 type Categoria = {
   id: number;
@@ -19,6 +20,8 @@ type Participante = {
 type ContaFinanceira = {
   id: number;
   nome: string;
+  diaFechamento: number | null;
+  diaVencimento: number | null;
 };
 
 type Props = {
@@ -45,7 +48,17 @@ type Props = {
   modoEdicao?: boolean;
   modoRecorrencia?: boolean;
 };
+
 const FORMAS_QUE_EXIGEM_VENCIMENTO = ["CARTAO"];
+
+function obterDataHoje() {
+  const hoje = new Date();
+  const ano = hoje.getFullYear();
+  const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+  const dia = String(hoje.getDate()).padStart(2, "0");
+  return `${ano}-${mes}-${dia}`;
+}
+
 export default function LancamentoForm({
   action,
   tipoInicial,
@@ -69,31 +82,63 @@ export default function LancamentoForm({
     (participante) => participante.nome === "Eu"
   );
 
-  const [dataLancamentoAtual] = useState(
-  dataLancamento || obterDataHoje()
-);
-
-  function obterDataHoje() {
-  const hoje = new Date();
-
-  const ano = hoje.getFullYear();
-  const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-  const dia = String(hoje.getDate()).padStart(2, "0");
-
-  return `${ano}-${mes}-${dia}`;
-  }
-  const categoriasFiltradas = categorias.filter(
-    (categoria) =>
-      categoria.tipo === null || categoria.tipo === tipoInicial
+  const [contaId, setContaId] = useState(
+    contaFinanceiraId?.toString() ?? ""
   );
-  const [formaPagamentoAtual, setFormaPagamentoAtual] = useState(
-    formaPagamento
+  const [dataMovimentacao, setDataMovimentacao] = useState(
+    dataLancamento || obterDataHoje()
   );
+  const [vencimento, setVencimento] = useState(dataVencimento);
+  const [formaPagamentoAtual, setFormaPagamentoAtual] =
+    useState(formaPagamento);
   const [Recorrente, setRecorrente] = useState(!!periodicidade);
+
+  const categoriasFiltradas = categorias.filter(
+    (categoria) => categoria.tipo === null || categoria.tipo === tipoInicial
+  );
+
   const exigeVencimento =
     modoRecorrencia ||
     Recorrente ||
-    tipoInicial === "SAIDA" && FORMAS_QUE_EXIGEM_VENCIMENTO.includes(formaPagamentoAtual);
+    (tipoInicial === "SAIDA" &&
+      FORMAS_QUE_EXIGEM_VENCIMENTO.includes(formaPagamentoAtual));
+
+
+  function atualizarVencimento(novaContaId: string, novaData: string) {
+    const conta = contasFinanceiras.find(
+      (c) => c.id.toString() === novaContaId
+    );
+
+    if (
+      !conta ||
+      !novaData ||
+      conta.diaFechamento === null ||
+      conta.diaVencimento === null
+    ) {
+      return;
+    }
+
+    setVencimento(
+      calcularVencimento(novaData, conta.diaFechamento, conta.diaVencimento)
+    );
+  }
+
+  function handleContaChange(novaContaId: string) {
+    setContaId(novaContaId);
+    atualizarVencimento(novaContaId, dataMovimentacao);
+  }
+
+  function handleDataChange(novaData: string) {
+    setDataMovimentacao(novaData);
+    atualizarVencimento(contaId, novaData);
+  }
+
+  function handleFormaPagamentoChange(forma: string) {
+    setFormaPagamentoAtual(forma);
+    if (!vencimento) {
+      atualizarVencimento(contaId, dataMovimentacao);
+    }
+  }
 
   return (
     <div className={Styles.container}>
@@ -108,24 +153,12 @@ export default function LancamentoForm({
                 : "Lançar entrada"}
         </h2>
 
-        <form
-          action={action}
-          className={Styles.formulario}
-        >
+        <form action={action} className={Styles.formulario}>
           {/* TIPO */}
-
-          <input
-            type="hidden"
-            name="tipo"
-            value={tipoInicial}
-          />
+          <input type="hidden" name="tipo" value={tipoInicial} />
 
           {/* DESCRIÇÃO */}
-
-          <label htmlFor="descricao">
-            Descrição
-          </label>
-
+          <label htmlFor="descricao">Descrição</label>
           <input
             id="descricao"
             type="text"
@@ -136,66 +169,52 @@ export default function LancamentoForm({
           />
 
           {/* VALOR + PAGAMENTO */}
-
           <ValorLancamento
             valorInicial={valor}
             formaPagamentoInicial={formaPagamento}
             statusInicial={status}
-            onFormaPagamentoChange={setFormaPagamentoAtual}
+            onFormaPagamentoChange={handleFormaPagamentoChange}
+            forcarPendenteCartao={
+              tipoInicial === "SAIDA" && !modoEdicao && !modoRecorrencia
+            }
           />
-
-          {/* CONTA FINANCEIRA */}
-          {tipoInicial === "ENTRADA" && (
-            <>
-              <label htmlFor="contaFinanceiraId">
-                Conta financeira
-              </label>
-
-              <select
-                id="contaFinanceiraId"
-                name="contaFinanceiraId"
-                defaultValue={contaFinanceiraId?.toString() ?? ""}
-                required
-              >
-                <option value="">
-                  Selecione a conta
-                </option>
-
-                {contasFinanceiras.map((conta) => (
-                  <option
-                    key={conta.id}
-                    value={conta.id}
-                  >
-                    {conta.nome}
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
+          
+          {/* CONTA FINANCEIRA (toda entrada e toda saída) */}
+          <label htmlFor="contaFinanceiraId">Conta financeira</label>
+          <select
+            id="contaFinanceiraId"
+            name="contaFinanceiraId"
+            value={contaId}
+            onChange={(e) => handleContaChange(e.target.value)}
+            required
+          >
+            <option value="">Selecione a conta</option>
+            {contasFinanceiras.map((conta) => (
+              <option key={conta.id} value={conta.id}>
+                {conta.nome}
+              </option>
+            ))}
+          </select>
 
           {/* PARCELAMENTO / RECORRÊNCIA */}
-
-          <ParcelamentoRecorrencia 
+          <ParcelamentoRecorrencia
             onRecorrenteChange={setRecorrente}
-            recorrenteInicial={modoRecorrencia || !!periodicidade} // 👈 novo
-            periodicidadeInicial={periodicidade ?? ""} />
+            recorrenteInicial={modoRecorrencia || !!periodicidade}
+            periodicidadeInicial={periodicidade ?? ""}
+          />
 
           {/* DATA LANÇAMENTO */}
-
-          <label htmlFor="dataLancamento">
-            Data da movimentação
-          </label>
-
+          <label htmlFor="dataLancamento">Data da movimentação</label>
           <input
             id="dataLancamento"
             type="date"
             name="dataLancamento"
-            defaultValue={dataLancamentoAtual}
+            value={dataMovimentacao}
+            onChange={(e) => handleDataChange(e.target.value)}
             required
           />
 
           {/* VENCIMENTO */}
-
           {exigeVencimento && (
             <>
               <label htmlFor="dataVencimento">Data de vencimento</label>
@@ -203,45 +222,30 @@ export default function LancamentoForm({
                 id="dataVencimento"
                 type="date"
                 name="dataVencimento"
-                defaultValue={dataVencimento}
-                required 
+                value={vencimento}
+                onChange={(e) => setVencimento(e.target.value)}
+                required
               />
             </>
           )}
 
           {/* CATEGORIA */}
-
-          <label htmlFor="categoriaId">
-            Categoria
-          </label>
-
+          <label htmlFor="categoriaId">Categoria</label>
           <select
             id="categoriaId"
             name="categoriaId"
-            defaultValue={
-              categoriaId?.toString() ?? ""
-            }
+            defaultValue={categoriaId?.toString() ?? ""}
           >
-            <option value="">
-              Selecione
-            </option>
-
+            <option value="">Selecione</option>
             {categoriasFiltradas.map((categoria) => (
-              <option
-                key={categoria.id}
-                value={categoria.id}
-              >
+              <option key={categoria.id} value={categoria.id}>
                 {categoria.nome}
               </option>
             ))}
           </select>
 
           {/* PARTICIPANTE */}
-
-          <label htmlFor="participanteId">
-            Participante
-          </label>
-
+          <label htmlFor="participanteId">Participante</label>
           <select
             id="participanteId"
             name="participanteId"
@@ -251,22 +255,15 @@ export default function LancamentoForm({
               ""
             }
           >
-            <option value="">
-              Selecione
-            </option>
-
+            <option value="">Selecione</option>
             {participantes.map((participante) => (
-              <option
-                key={participante.id}
-                value={participante.id}
-              >
+              <option key={participante.id} value={participante.id}>
                 {participante.nome}
               </option>
             ))}
           </select>
 
           {/* BOTÃO */}
-
           <button type="submit">
             {modoEdicao || modoRecorrencia
               ? "Salvar alterações"
