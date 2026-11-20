@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { Excluir_lancamento } from "@/app/actions/lancamento"; // ajuste o caminho
+import styles from "@/app/styles/listarLancamento.module.css";
 
 type Props = {
   id: number;
@@ -37,7 +38,7 @@ export default function BotaoExcluirLancamento({
   }
 
   return (
-    <button type="button" onClick={excluir} disabled={excluindo}>
+    <button className={styles.apagar} type="button" onClick={excluir} disabled={excluindo}>
       {excluindo ? "Excluindo..." : "Excluir"}
     </button>
   );

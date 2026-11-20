@@ -74,8 +74,8 @@ export async function Dados_dashboard() {
 
   // Intervalo do mês atual
   const agora = new Date();
-  const inicioMes = new Date(agora.getFullYear(), agora.getMonth(), 1);
-  const fimMes = new Date(agora.getFullYear(), agora.getMonth() + 1, 1);
+  const inicioMes = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), 1));
+  const fimMes = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth() + 1, 1));
 
   const [
     contasFinanceiras,
@@ -96,11 +96,16 @@ export async function Dados_dashboard() {
     }),
 
     // Entradas pagas vinculadas a contas ativas
+// Entradas pagas no mês atual, vinculadas a contas ativas
     prisma.lancamento.aggregate({
       where: {
         usuarioId,
         tipo: "ENTRADA",
         status: "PAGO",
+        dataLancamento: {
+          gte: inicioMes,
+          lt: fimMes,
+        },
         contaFinanceira: {
           ativo: true,
         },

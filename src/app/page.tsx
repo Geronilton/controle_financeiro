@@ -86,7 +86,7 @@ export default async function Home({
         <div className={styles.resumoValores}>
 
           <div className={styles.entradaCard}>
-            <span>Entradas</span>
+            <span>Entradas de {nomeMesFormatado}</span>
 
             <strong>
               + R${" "}
