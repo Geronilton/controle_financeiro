@@ -1,4 +1,3 @@
-
 import { Fatura_participante } from "@/app/actions/participante";
 
 import styles from "@/app/styles/faturaParticipante.module.css";
@@ -15,6 +14,13 @@ type Props = {
   mes: number;
   ano: number;
   mostrarAcesso?: boolean;
+  conta?: {
+    id: number;
+    nome: string;
+    cartaoCredito: boolean;
+    diaFechamento: number | null;
+    diaVencimento: number | null;
+  } | null;
 };
 
 export default async function FaturaParticipante({
@@ -23,46 +29,38 @@ export default async function FaturaParticipante({
   mes,
   ano,
   mostrarAcesso = false,
+  conta = null,
 }: Props) {
-  const contasFinanceiras = (
-    await Listar_contas_financeiras()
-  ).map((conta) => ({
-    ...conta,
-    saldo: Number(conta.saldo),
-    objetivo: conta.objetivo
-      ? Number(conta.objetivo)
-      : null,
-  }));
+  const contasFinanceiras = (await Listar_contas_financeiras()).map(
+    (c) => ({
+      ...c,
+      saldo: Number(c.saldo),
+      objetivo: c.objetivo ? Number(c.objetivo) : null,
+    })
+  );
 
   const fatura = await Fatura_participante(
     participanteId,
     mes,
-    ano
+    ano,
+    conta?.id
   );
 
-  const temLancamentos =
-    fatura.lancamentos.length > 0;
+  const temLancamentos = fatura.lancamentos.length > 0;
 
-  const temPendencias =
-    fatura.lancamentos.some(
-      (lancamento) =>
-        lancamento.status !== "PAGO"
-    );
+  const temPendencias = fatura.lancamentos.some(
+    (lancamento) => lancamento.status !== "PAGO"
+  );
 
-  const faturaPaga =
-    temLancamentos && !temPendencias;
+  const faturaPaga = temLancamentos && !temPendencias;
 
-  const nomeMes = new Date(
-    ano,
-    mes - 1,
-    1
-  ).toLocaleDateString("pt-BR", {
-    month: "long",
-  });
+  // Data em UTC para não deslocar o mês no fuso local
+  const nomeMes = new Date(Date.UTC(ano, mes - 1, 1)).toLocaleDateString(
+    "pt-BR",
+    { month: "long", timeZone: "UTC" }
+  );
 
-  const mesFormatado =
-    nomeMes.charAt(0).toUpperCase() +
-    nomeMes.slice(1);
+  const mesFormatado = nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
 
   return (
     <section className={styles.container}>
@@ -74,7 +72,7 @@ export default async function FaturaParticipante({
 
           {mostrarAcesso && (
             <Link
-              href={`/fatura?participante=${participanteId}&mes=${mes}&ano=${ano}`}
+              href={`/fatura?participante=${participanteId}&conta=${conta?.id ?? "todas"}&mes=${mes}&ano=${ano}`}
               className={styles.acessar}
             >
               Acessar fatura →
@@ -86,18 +84,23 @@ export default async function FaturaParticipante({
           Fatura de {participanteNome}
         </div>
 
+        {conta && (
+          <div className={styles.participante}>
+            {conta.nome}
+            {conta.cartaoCredito &&
+              ` · fecha dia ${conta.diaFechamento} · vence dia ${conta.diaVencimento}`}
+          </div>
+        )}
+
         <div className={styles.total}>
           <span>Total</span>
 
           <strong>
             R${" "}
-            {fatura.totalPendente.toLocaleString(
-              "pt-BR",
-              {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              }
-            )}
+            {fatura.totalPendente.toLocaleString("pt-BR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
           </strong>
         </div>
 
@@ -112,4 +115,3 @@ export default async function FaturaParticipante({
     </section>
   );
 }
-

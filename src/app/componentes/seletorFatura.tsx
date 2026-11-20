@@ -8,9 +8,16 @@ type Participante = {
   nome: string;
 };
 
+type Conta = {
+  id: number;
+  nome: string;
+};
+
 type Props = {
   participantes: Participante[];
   participanteSelecionado: string;
+  contas: Conta[];
+  contaSelecionada: string;
   mes: number;
   ano: number;
 };
@@ -33,27 +40,42 @@ const meses = [
 export default function SeletorFatura({
   participantes,
   participanteSelecionado,
+  contas,
+  contaSelecionada,
   mes,
   ano,
 }: Props) {
-
   const router = useRouter();
 
-  function alterarParticipante(
-    participante: string
+  // Único ponto de navegação: mantém os demais parâmetros da URL
+  function navegar(
+    novos: Partial<{
+      participante: string;
+      conta: string;
+      mes: number;
+      ano: number;
+    }>
   ) {
-    router.push(
-      `/fatura?participante=${participante}&mes=${mes}&ano=${ano}`
-    );
+    const params = new URLSearchParams({
+      participante: participanteSelecionado,
+      conta: contaSelecionada,
+      mes: String(mes),
+      ano: String(ano),
+    });
+
+    for (const [chave, valor] of Object.entries(novos)) {
+      params.set(chave, String(valor));
+    }
+
+    router.push(`/fatura?${params.toString()}`);
   }
 
-  function alterarMes(
-    novoMes: number,
-    novoAno: number
-  ) {
-    router.push(
-      `/fatura?participante=${participanteSelecionado}&mes=${novoMes}&ano=${novoAno}`
-    );
+  function alterarParticipante(participante: string) {
+    navegar({ participante });
+  }
+
+  function alterarMes(novoMes: number, novoAno: number) {
+    navegar({ mes: novoMes, ano: novoAno });
   }
 
   function mesAnterior() {
@@ -74,16 +96,32 @@ export default function SeletorFatura({
 
   return (
     <div className={styles.seletor}>
+      {/* CONTAS */}
+
+      <div className={styles.participantes}>
+
+        {contas.map((conta) => (
+          <button
+            key={conta.id}
+            type="button"
+            onClick={() => navegar({ conta: conta.id.toString() })}
+            className={
+              contaSelecionada === conta.id.toString()
+                ? styles.participanteAtivo
+                : styles.participante
+            }
+          >
+            {conta.nome}
+          </button>
+        ))}
+      </div>
 
       {/* PARTICIPANTES */}
 
       <div className={styles.participantes}>
-
         <button
           type="button"
-          onClick={() =>
-            alterarParticipante("todos")
-          }
+          onClick={() => alterarParticipante("todos")}
           className={
             participanteSelecionado === "todos"
               ? styles.participanteAtivo
@@ -93,34 +131,25 @@ export default function SeletorFatura({
           Todos
         </button>
 
-        {participantes.map(
-          (participante) => (
-            <button
-              key={participante.id}
-              type="button"
-              onClick={() =>
-                alterarParticipante(
-                  participante.id.toString()
-                )
-              }
-              className={
-                participanteSelecionado ===
-                participante.id.toString()
-                  ? styles.participanteAtivo
-                  : styles.participante
-              }
-            >
-              {participante.nome}
-            </button>
-          )
-        )}
-
+        {participantes.map((participante) => (
+          <button
+            key={participante.id}
+            type="button"
+            onClick={() => alterarParticipante(participante.id.toString())}
+            className={
+              participanteSelecionado === participante.id.toString()
+                ? styles.participanteAtivo
+                : styles.participante
+            }
+          >
+            {participante.nome}
+          </button>
+        ))}
       </div>
 
       {/* MESES */}
 
       <div className={styles.mesesContainer}>
-
         <button
           type="button"
           onClick={mesAnterior}
@@ -131,38 +160,21 @@ export default function SeletorFatura({
         </button>
 
         <div className={styles.meses}>
+          {meses.map((nomeMes, index) => {
+            const numeroMes = index + 1;
+            const ativo = numeroMes === mes;
 
-          {meses.map(
-            (nomeMes, index) => {
-
-              const numeroMes =
-                index + 1;
-
-              const ativo =
-                numeroMes === mes;
-
-              return (
-                <button
-                  key={numeroMes}
-                  type="button"
-                  onClick={() =>
-                    alterarMes(
-                      numeroMes,
-                      ano
-                    )
-                  }
-                  className={
-                    ativo
-                      ? styles.mesAtivo
-                      : styles.mes
-                  }
-                >
-                  {nomeMes}
-                </button>
-              );
-            }
-          )}
-
+            return (
+              <button
+                key={numeroMes}
+                type="button"
+                onClick={() => alterarMes(numeroMes, ano)}
+                className={ativo ? styles.mesAtivo : styles.mes}
+              >
+                {nomeMes}
+              </button>
+            );
+          })}
         </div>
 
         <button
@@ -173,14 +185,11 @@ export default function SeletorFatura({
         >
           →
         </button>
-
       </div>
 
       <div className={styles.ano}>
         <span> {ano}</span>
       </div>
-
     </div>
   );
 }
-

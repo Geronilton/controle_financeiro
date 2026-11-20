@@ -138,12 +138,13 @@ export async function excluir_participante(id: number) {
 export async function Fatura_participante(
   participanteId: number,
   mes: number,
-  ano: number
+  ano: number,
+  contaId?: number
 ) {
   const usuarioId = await exigirUsuarioId();
 
-  const inicio = new Date(ano, mes - 1, 1);
-  const fim = new Date(ano, mes, 1);
+  const inicio = new Date(Date.UTC(ano, mes - 1, 1));
+  const fim = new Date(Date.UTC(ano, mes, 1));
 
   // Garante que o participante pertence ao usuário da sessão
   const participante = await prisma.participante.findFirst({
@@ -163,6 +164,7 @@ export async function Fatura_participante(
       usuarioId,
       participanteId,
       tipo: "SAIDA",
+      ...(contaId ? { contaFinanceiraId: contaId } : {}),
     },
     include: {
       parcelas: {
@@ -208,13 +210,10 @@ export async function Fatura_participante(
     /*
      * Lançamento normal ou recorrente
      */
+    const dataReferencia =
+      lancamento.dataVencimento ?? lancamento.dataLancamento;
 
-    const dataReferencia = lancamento.dataVencimento ?? lancamento.dataLancamento;
-
-    if (
-      dataReferencia >= inicio &&
-      dataReferencia < fim
-    ) {
+    if (dataReferencia >= inicio && dataReferencia < fim) {
       itens.push({
         id: `lancamento-${lancamento.id}`,
         lancamentoId: lancamento.id,
@@ -229,18 +228,12 @@ export async function Fatura_participante(
   }
 
   // Total de todos os itens da fatura
-  const total = itens.reduce(
-    (soma, item) => soma + item.valor,
-    0
-  );
+  const total = itens.reduce((soma, item) => soma + item.valor, 0);
 
   // Total somente das dívidas pendentes
   const totalPendente = itens
     .filter((item) => item.status !== "PAGO")
-    .reduce(
-      (soma, item) => soma + item.valor,
-      0
-    );
+    .reduce((soma, item) => soma + item.valor, 0);
 
   return {
     lancamentos: itens,

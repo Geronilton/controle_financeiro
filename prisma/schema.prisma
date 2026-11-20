@@ -117,6 +117,7 @@ model ContaFinanceira {
   descricao    String?
   saldo        Decimal       @default(0) @db.Decimal(10, 2)
   objetivo     Decimal?      @db.Decimal(10, 2)
+  cartaoCredito Boolean @default(false)
   diaFechamento Int? 
   diaVencimento Int?
   usuarioId    Int

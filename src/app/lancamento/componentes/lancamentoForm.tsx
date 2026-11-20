@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Styles from "../novo/page.module.css";
 import ParcelamentoRecorrencia from "./ParcelamentoRecorrencia";
 import ValorLancamento from "./ValorLancamento";
-import { calcularVencimento } from "../../lib/vencimento"; // ajuste o caminho se necessário
+import { calcularVencimento } from "../../lib/vencimento"; 
+import { ResultadoAcao } from "@/app/lib/erroNegocio";
 
 type Categoria = {
   id: number;
@@ -25,7 +26,7 @@ type ContaFinanceira = {
 };
 
 type Props = {
-  action: (formData: FormData) => void | Promise<void>;
+  action: (formData: FormData) => Promise<unknown>;
   tipoInicial: "ENTRADA" | "SAIDA";
 
   descricao?: string;
@@ -102,7 +103,8 @@ export default function LancamentoForm({
     Recorrente ||
     (tipoInicial === "SAIDA" &&
       FORMAS_QUE_EXIGEM_VENCIMENTO.includes(formaPagamentoAtual));
-
+  const nomeContaAtual =
+  contasFinanceiras.find((c) => c.id.toString() === contaId)?.nome ?? "";
 
   function atualizarVencimento(novaContaId: string, novaData: string) {
     const conta = contasFinanceiras.find(
@@ -139,7 +141,18 @@ export default function LancamentoForm({
       atualizarVencimento(contaId, dataMovimentacao);
     }
   }
+const [erro, setErro] = useState<string | null>(null);
+const [enviando, startTransition] = useTransition();
+function enviar(e: React.FormEvent<HTMLFormElement>) {
+  e.preventDefault();
+  const formData = new FormData(e.currentTarget);
+  setErro(null);
 
+  startTransition(async () => {
+    const resultado = (await action(formData)) as ResultadoAcao | undefined;
+    if (resultado?.erro) setErro(resultado.erro);
+  });
+}
   return (
     <div className={Styles.container}>
       <div className={Styles.card}>
@@ -153,7 +166,7 @@ export default function LancamentoForm({
                 : "Lançar entrada"}
         </h2>
 
-        <form action={action} className={Styles.formulario}>
+        <form onSubmit={enviar} className={Styles.formulario}>
           {/* TIPO */}
           <input type="hidden" name="tipo" value={tipoInicial} />
 
@@ -174,27 +187,39 @@ export default function LancamentoForm({
             formaPagamentoInicial={formaPagamento}
             statusInicial={status}
             onFormaPagamentoChange={handleFormaPagamentoChange}
-            forcarPendenteCartao={
-              tipoInicial === "SAIDA" && !modoEdicao && !modoRecorrencia
-            }
           />
           
           {/* CONTA FINANCEIRA (toda entrada e toda saída) */}
-          <label htmlFor="contaFinanceiraId">Conta financeira</label>
-          <select
-            id="contaFinanceiraId"
-            name="contaFinanceiraId"
-            value={contaId}
-            onChange={(e) => handleContaChange(e.target.value)}
-            required
-          >
-            <option value="">Selecione a conta</option>
-            {contasFinanceiras.map((conta) => (
-              <option key={conta.id} value={conta.id}>
-                {conta.nome}
-              </option>
-            ))}
-          </select>
+          {modoEdicao || modoRecorrencia ? (
+            <>
+              <label htmlFor="contaFinanceiraNome">Conta financeira</label>
+              <input
+                id="contaFinanceiraNome"
+                type="text"
+                value={nomeContaAtual}
+                disabled
+              />
+              <input type="hidden" name="contaFinanceiraId" value={contaId} />
+            </>
+          ) : (
+            <>
+              <label htmlFor="contaFinanceiraId">Conta financeira</label>
+              <select
+                id="contaFinanceiraId"
+                name="contaFinanceiraId"
+                value={contaId}
+                onChange={(e) => handleContaChange(e.target.value)}
+                required
+              >
+                <option value="">Selecione a conta</option>
+                {contasFinanceiras.map((conta) => (
+                  <option key={conta.id} value={conta.id}>
+                    {conta.nome}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           {/* PARCELAMENTO / RECORRÊNCIA */}
           <ParcelamentoRecorrencia
@@ -218,14 +243,26 @@ export default function LancamentoForm({
           {exigeVencimento && (
             <>
               <label htmlFor="dataVencimento">Data de vencimento</label>
-              <input
-                id="dataVencimento"
-                type="date"
-                name="dataVencimento"
-                value={vencimento}
-                onChange={(e) => setVencimento(e.target.value)}
-                required
-              />
+              {modoEdicao ? (
+                <>
+                  <input
+                    id="dataVencimento"
+                    type="date"
+                    value={vencimento}
+                    disabled
+                  />
+                  <input type="hidden" name="dataVencimento" value={vencimento} />
+                </>
+              ) : (
+                <input
+                  id="dataVencimento"
+                  type="date"
+                  name="dataVencimento"
+                  value={vencimento}
+                  onChange={(e) => setVencimento(e.target.value)}
+                  required
+                />
+              )}
             </>
           )}
 
@@ -262,15 +299,21 @@ export default function LancamentoForm({
               </option>
             ))}
           </select>
+          {erro && (
+              <p role="alert" style={{ color: "var(--mireis-vermelho)" }}>
+                {erro}
+              </p>
+            )}
 
-          {/* BOTÃO */}
-          <button type="submit">
-            {modoEdicao || modoRecorrencia
-              ? "Salvar alterações"
-              : tipoInicial === "SAIDA"
-                ? "Registrar dívida"
-                : "Registrar entrada"}
-          </button>
+            <button type="submit" disabled={enviando}>
+              {enviando
+                ? "Salvando..."
+                : modoEdicao || modoRecorrencia
+                  ? "Salvar alterações"
+                  : tipoInicial === "SAIDA"
+                    ? "Registrar dívida"
+                    : "Registrar entrada"}
+            </button>
         </form>
       </div>
     </div>

@@ -7,6 +7,7 @@ import {
 import styles from "@/app/styles/listarLancamento.module.css";
 import { exigirUsuarioId } from "@/app/lib/auth";
 import { formatarData } from "@/app/lib/formatarData";
+import BotaoExcluirLancamento from "../componentes/botãoExcluirLancamento";
 
 type Props = {
   limite?: number;
@@ -153,19 +154,12 @@ export default async function ListarLancamento({
                     </button>
                   </form>
                 ) : (
-                  <form
-                    action={Excluir_lancamento.bind(
-                      null,
-                      lancamento.id
-                    )}
-                  >
-                    <button
-                      type="submit"
-                      className={styles.apagar}
-                    >
-                      Apagar
-                    </button>
-                  </form>
+                 <BotaoExcluirLancamento
+                  id={lancamento.id}
+                  descricao={lancamento.descricao}
+                  tipo={lancamento.tipo}
+                  afetaSaldo={lancamento.status === "PAGO" && lancamento.contaFinanceiraId != null}
+                />
                 )}
               </div>
             </article>

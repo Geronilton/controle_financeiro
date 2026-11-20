@@ -7,7 +7,6 @@ type Props = {
   formaPagamentoInicial?: string;
   statusInicial?: string;
   onFormaPagamentoChange?: (forma: string) => void;
-  forcarPendenteCartao?: boolean;
 };
 
 export default function ValorLancamento({
@@ -15,7 +14,6 @@ export default function ValorLancamento({
   formaPagamentoInicial,
   statusInicial = "PAGO",
   onFormaPagamentoChange,
-  forcarPendenteCartao = false,
 }: Props) {
   const [valor, setValor] = useState(valorInicial?.toString() ?? "");
   const [formaPagamento, setFormaPagamento] = useState(
@@ -26,16 +24,8 @@ export default function ValorLancamento({
   const pagamentoImediato =
     formaPagamento === "PIX" || formaPagamento === "DINHEIRO";
 
-  const cartaoPendenteFixo =
-    forcarPendenteCartao && formaPagamento === "CARTAO";
-
   // Status que realmente será enviado
-  const statusTravado = pagamentoImediato || cartaoPendenteFixo;
-  const statusEfetivo = pagamentoImediato
-    ? "PAGO"
-    : cartaoPendenteFixo
-      ? "PENDENTE"
-      : status;
+  const statusEfetivo = pagamentoImediato ? "PAGO" : status;
 
   function alterarFormaPagamento(novaForma: string) {
     setFormaPagamento(novaForma);
@@ -44,8 +34,8 @@ export default function ValorLancamento({
     if (novaForma === "PIX" || novaForma === "DINHEIRO") {
       setStatus("PAGO");
     }
-
-    if (forcarPendenteCartao && novaForma === "CARTAO") {
+    
+    if (novaForma === "CARTAO") {
       setStatus("PENDENTE");
     }
   }
@@ -83,15 +73,10 @@ export default function ValorLancamento({
       {/* STATUS */}
       <label htmlFor="status">Status</label>
 
-      {statusTravado ? (
+      {pagamentoImediato ? (
         <>
-          <input
-            id="status"
-            type="text"
-            value={statusEfetivo === "PAGO" ? "Pago" : "Pendente"}
-            disabled
-          />
-          <input type="hidden" name="status" value={statusEfetivo} />
+          <input id="status" type="text" value="Pago" disabled />
+          <input type="hidden" name="status" value="PAGO" />
         </>
       ) : (
         <select
@@ -104,10 +89,6 @@ export default function ValorLancamento({
           <option value="PENDENTE">Pendente</option>
           <option value="PAGO">Pago</option>
         </select>
-      )}
-
-      {cartaoPendenteFixo && (
-        <small>Compras no cartão entram na fatura e ficam pendentes.</small>
       )}
 
       {/* VALOR PAGO: enviado sempre que o status efetivo é Pago */}

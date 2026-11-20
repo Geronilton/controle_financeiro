@@ -53,6 +53,9 @@ export default async function EditarContaFinanceiraPage({
           ? Number(conta.objetivo)
           : null
       }
+      diaFechamento = {conta.diaFechamento}
+      diaVencimento={conta.diaVencimento}
+      cartaoCredito
       modoEdicao
     />
   );

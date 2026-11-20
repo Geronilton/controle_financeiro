@@ -13,6 +13,7 @@ import {
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { exigirUsuarioId } from "../lib/auth";
+import { ErroNegocio, type ResultadoAcao } from "../lib/erroNegocio";
 
 type DadosLancamento = {
   descricao: string;
@@ -30,6 +31,40 @@ type DadosLancamento = {
   contaFinanceiraId: number | null;
   participanteId: number | null;
 };
+
+type EstadoLancamento = {
+  tipo: TipoLancamento;
+  valorPago: number;
+  contaFinanceiraId: number | null;
+};
+
+type LancamentoComParcelas = Prisma.LancamentoGetPayload<{
+  include: {
+    parcelas: true;
+  };
+}>;
+
+type ParcelaLancamento = LancamentoComParcelas["parcelas"][number];
+
+type PagamentoFatura =
+  | {
+      tipo: "LANCAMENTO";
+      lancamentoId: LancamentoComParcelas["id"];
+      valorCentavos: number;
+      valorFinalCentavos: number;
+      valorPagoAnteriorCentavos: number;
+    }
+  | {
+      tipo: "PARCELA";
+      lancamentoId: LancamentoComParcelas["id"];
+      parcelaId: ParcelaLancamento["id"];
+      valorCentavos: number;
+    };
+
+const emCentavos = (valor: number) =>
+  Math.round(valor * 100);
+
+const deCentavos = (valor: number) => valor / 100;
 
 export async function Dados_dashboard() {
   const usuarioId = await exigirUsuarioId();
@@ -172,77 +207,47 @@ export async function Novo_lancamento(
   }
   const dados = obterDadosLancamento(formData, usuarioId);
 
-  await prisma.$transaction(async (tx) => {
-
-    if (dados.tipo === TipoLancamento.ENTRADA) {
+  try {
+    await prisma.$transaction(async (tx) => {
       if (!dados.contaFinanceiraId) {
-        throw new Error(
-          "Toda entrada deve estar vinculada a uma conta financeira."
+        throw new ErroNegocio(
+          "Todo lançamento deve estar vinculado a uma conta financeira."
         );
       }
 
-      const conta =
-        await tx.contaFinanceira.findFirst({
-          where: {
-            id: dados.contaFinanceiraId,
-            usuarioId,
-            ativo: true,
-          },
-        });
+      const conta = await tx.contaFinanceira.findFirst({
+        where: { id: dados.contaFinanceiraId, usuarioId, ativo: true },
+      });
 
       if (!conta) {
-        throw new Error(
-          "Conta financeira não encontrada."
-        );
+        throw new ErroNegocio("Conta financeira não encontrada.");
       }
-    }
 
-    // =====================================================
-    // RECORRÊNCIA
-    // =====================================================
+      if (dados.periodicidade) {
+        await criarRecorrencia(tx, dados);
+        return;
+      }
 
-    if (dados.periodicidade) {
-      await criarRecorrencia(tx, dados);
-      return;
-    }
+      const lancamento = await criarLancamento(tx, dados);
+      await criarParcelas(tx, lancamento.id, dados);
 
-    // =====================================================
-    // LANÇAMENTO NORMAL
-    // =====================================================
+    const movimentaAgora =
+      dados.status === StatusLancamento.PAGO &&
+      dados.quantidadeParcelas === 1 &&
+      (
+      dados.tipo === TipoLancamento.ENTRADA
+        ? dados.formaPagamento !== TipoPagamento.CARTAO
+        : dados.formaPagamento !== TipoPagamento.CARTAO
+      );
 
-    const lancamento =
-      await criarLancamento(tx, dados);
-
-    // =====================================================
-    // PARCELAMENTO
-    // =====================================================
-
-    await criarParcelas(
-      tx,
-      lancamento.id,
-      dados
-    );
-
-    // =====================================================
-    // ENTRADA PAGA → ADICIONA AO SALDO
-    // =====================================================
-
-    if (
-      dados.tipo === TipoLancamento.ENTRADA &&
-      dados.status === StatusLancamento.PAGO
-    ) {
-      await tx.contaFinanceira.update({
-        where: {
-          id: dados.contaFinanceiraId!,
-        },
-        data: {
-          saldo: {
-            increment: dados.valorPago,
-          },
-        },
-      });
-    }
-  });
+      if (movimentaAgora) {
+        await movimentarSaldo(tx, usuarioId, conta, dados.tipo, dados.valorPago);
+      }
+    });
+  } catch (e) {
+    if (e instanceof ErroNegocio) return { erro: e.message };
+    throw e;
+  }
 
   revalidatePath("/lancamento/listar");
   revalidatePath("/conta-financeira");
@@ -291,35 +296,75 @@ export async function Listar_recorrencias(limite?: number) {
 }
 
 
-export async function Excluir_lancamento(id: number) {
+export async function Excluir_lancamento(id: number): Promise<ResultadoAcao> {
   const usuarioId = await exigirUsuarioId();
+  if (usuarioId === null) {
+    throw new Error("Usuário não autenticado.");
+  }
 
-  await prisma.$transaction(async (tx) => {
-    const lancamento = await tx.lancamento.findFirst({
-      where: {
-        id,
-        usuarioId,
-      },
+  try {
+    await prisma.$transaction(async (tx) => {
+      const lancamento = await tx.lancamento.findFirst({
+        where: { id, usuarioId },
+      });
+
+      if (!lancamento) {
+        throw new ErroNegocio("Lançamento não encontrado.");
+      }
+
+      const quantidadeParcelas = await tx.parcela.count({
+        where: { lancamentoId: lancamento.id },
+      });
+
+      // mesma condição usada ao criar (movimentaAgora)
+      const movimentouSaldo =
+        lancamento.status === StatusLancamento.PAGO &&
+        lancamento.contaFinanceiraId !== null &&
+        (lancamento.tipo === TipoLancamento.ENTRADA || quantidadeParcelas <= 1);
+
+      if (movimentouSaldo) {
+        const contaId = lancamento.contaFinanceiraId!;
+        const valor = Number(lancamento.valorPago);
+
+        if (lancamento.tipo === TipoLancamento.ENTRADA) {
+          // retirar a entrada do saldo, sem deixar a conta negativa
+          const { count } = await tx.contaFinanceira.updateMany({
+            where: { id: contaId, usuarioId, saldo: { gte: valor } },
+            data: { saldo: { decrement: valor } },
+          });
+
+          if (count === 0) {
+            throw new ErroNegocio(
+              "Não é possível excluir: o saldo atual da conta é menor que o valor desta entrada."
+            );
+          }
+        } else {
+          // devolver a saída ao saldo
+          await tx.contaFinanceira.update({
+            where: { id: contaId, usuarioId },
+            data: { saldo: { increment: valor } },
+          });
+        }
+      }
+
+      await tx.parcela.deleteMany({
+        where: { lancamentoId: lancamento.id },
+      });
+
+      await tx.lancamento.delete({
+        where: { id: lancamento.id },
+      });
     });
-
-    if (!lancamento) {
-      throw new Error("Lançamento não encontrado.");
-    }
-
-    await tx.parcela.deleteMany({
-      where: {
-        lancamentoId: lancamento.id,
-      },
-    });
-
-    await tx.lancamento.delete({
-      where: {
-        id: lancamento.id,
-      },
-    });
-  });
+  } catch (e) {
+    if (e instanceof ErroNegocio) return { erro: e.message };
+    throw e;
+  }
 
   revalidatePath("/lancamento/listar");
+  revalidatePath("/conta-financeira");
+  revalidatePath("/");
+
+  return {};
 }
 
 export async function Pausar_recorrencia(id: number) {
@@ -529,228 +574,162 @@ export async function Editar_recorrencia(
 export async function Editar_lancamento(
   id: number,
   formData: FormData
-) {
+): Promise<ResultadoAcao> {
   const usuarioId = await exigirUsuarioId();
-  const descricao =
-    formData.get("descricao")?.toString() ?? "";
 
-  const valor = Number(formData.get("valor"));
-
-  const tipo =
-    formData.get("tipo") as TipoLancamento;
-
-  const status =
-    formData.get("status") as StatusLancamento;
-
-  const formaPagamento =
-    formData.get("formaPagamento") as TipoPagamento;
-
-  
-  const quantidadeParcelas = Number(
-    formData.get("quantidadeParcelas") ?? 1
-  );
-
-  const valorPagoInformado = Number(
-    formData.get("valorPago") ?? 0
-  );
-
-  const valorPago =
-    formaPagamento === "PIX" ||
-      formaPagamento === "DINHEIRO"
-      ? valor
-      : valorPagoInformado;
-
-  const dataLancamento = new Date(
-    formData.get("dataLancamento")?.toString() ??
-    new Date()
-  );
-
-  const dataVencimento =
-    formData.get("dataVencimento")
-      ? new Date(
-        formData.get("dataVencimento")!.toString()
-      )
-      : null;
-
-  const categoriaId = formData.get("categoriaId")
-    ? Number(formData.get("categoriaId"))
-    : null;
-
-  const contaFinanceiraId =
-    formData.get("contaFinanceiraId")
-      ? Number(formData.get("contaFinanceiraId"))
-      : null;
-
-  const participanteId =
-    formData.get("participanteId")
-      ? Number(formData.get("participanteId"))
-      : null;
-
-  if (!descricao) {
-    throw new Error("Descrição é obrigatória.");
+  if (usuarioId === null) {
+    throw new Error("Usuário não autenticado.");
   }
 
-  if (!valor || valor <= 0) {
-    throw new Error(
-      "Valor é obrigatório e deve ser maior que zero."
-    );
+  let dados: DadosLancamento;
+
+  // Reutiliza a mesma função de leitura e validação
+  // utilizada na criação do lançamento.
+  try {
+    dados = obterDadosLancamento(formData, usuarioId);
+  } catch (e) {
+    if (e instanceof Error) {
+      return { erro: e.message };
+    }
+
+    throw e;
   }
 
-   await prisma.$transaction(async (tx) => {
-    const lancamento = await tx.lancamento.findFirst({
-      where: {
-        id,
-        usuarioId,
-      },
-      include: {
-        parcelas: {
-          orderBy: {
-            numeroParcela: "asc",
-          },
-        },
-      },
-    });
-
-    if (!lancamento) {
-      throw new Error("Lançamento não encontrado.");
-    }
-
-    /*
-     * Verifica se o lançamento já possuía parcelas
-     */
-    const tinhaParcelas = lancamento.parcelas.length > 0;
-
-    if (
-    tinhaParcelas &&
-      quantidadeParcelas < lancamento.parcelas.length
-    ) {
-      const parcelasQueSeriamRemovidas =
-        lancamento.parcelas.filter(
-          (parcela) =>
-            parcela.numeroParcela > quantidadeParcelas
-        );
-
-      const existeParcelaPaga =
-        parcelasQueSeriamRemovidas.some(
-          (parcela) =>
-            parcela.status === StatusParcela.PAGO
-        );
-
-      if (existeParcelaPaga) {
-        throw new Error(
-          "Não é possível reduzir a quantidade de parcelas porque existem parcelas que já foram pagas."
-        );
-      }
-    }
-    await tx.lancamento.update({
-      where: {
-        id: lancamento.id,
-      },
-      data: {
-        descricao,
-        valor,
-        valorPago,
-        tipo,
-        status,
-        quantidadeParcelas,
-        formaPagamento,
-        dataLancamento,
-        dataVencimento,
-        categoriaId,
-        contaFinanceiraId,
-        participanteId,
-      },
-    });
-
-    /*
-     * Se já existiam parcelas OU se a quantidade
-     * informada agora é maior que 1, precisamos
-     * criar/atualizar os registros da tabela Parcela.
-     */
-    if (tinhaParcelas || quantidadeParcelas > 1) {
-      /*
-       * Guarda os status das parcelas que já existiam.
-       *
-       * Exemplo:
-       * parcela 1 = PAGO
-       * parcela 2 = PENDENTE
-       * parcela 3 = PENDENTE
-       *
-       * Esses status não serão alterados pela edição.
-       */
-      const statusParcelasExistentes = new Map(
-        lancamento.parcelas.map((parcela) => [
-          parcela.numeroParcela,
-          parcela.status,
-        ])
-      );
-
-      /*
-       * Remove as parcelas antigas
-       */
-      await tx.parcela.deleteMany({
+  try {
+    await prisma.$transaction(async (tx) => {
+      const lancamento = await tx.lancamento.findFirst({
         where: {
-          lancamentoId: lancamento.id,
+          id,
+          usuarioId,
+        },
+        include: {
+          parcelas: {
+            orderBy: {
+              numeroParcela: "asc",
+            },
+          },
         },
       });
 
-      /*
-       * Calcula o valor de cada parcela em centavos
-       */
-      const valorCentavos = Math.round(valor * 100);
+      if (!lancamento) {
+        throw new ErroNegocio("Lançamento não encontrado.");
+      }
 
-      const valorBase = Math.floor(
-        valorCentavos / quantidadeParcelas
+      if (
+        lancamento.contaFinanceiraId !== null &&
+        lancamento.contaFinanceiraId !== dados.contaFinanceiraId
+      ) {
+        throw new ErroNegocio(
+          "A conta financeira do lançamento não pode ser alterada."
+        );
+      }
+
+      if (
+        dados.tipo === TipoLancamento.SAIDA &&
+        dados.contaFinanceiraId === null
+      ) {
+        throw new ErroNegocio(
+          "Toda saída deve estar vinculada a uma conta financeira."
+        );
+      }
+
+      const conta = dados.contaFinanceiraId
+        ? await tx.contaFinanceira.findFirst({
+            where: {
+              id: dados.contaFinanceiraId,
+              usuarioId,
+            },
+          })
+        : null;
+
+      if (dados.contaFinanceiraId !== null && !conta) {
+        throw new ErroNegocio(
+          "Conta financeira não encontrada."
+        );
+      }
+
+      // 1. Calcula o efeito financeiro antigo.
+      const efeitoAntigo = efeitoNoSaldo({
+        tipo: lancamento.tipo,
+        valorPago: Number(lancamento.valorPago),
+        contaFinanceiraId: lancamento.contaFinanceiraId,
+      });
+
+      // 2. Sincroniza as parcelas e obtém o valor realmente pago.
+      const resultadoParcelas = await sincronizarParcelas(
+        tx,
+        lancamento,
+        dados
       );
 
-      const resto =
-        valorCentavos % quantidadeParcelas;
+      // 3. Calcula o efeito financeiro novo.
+      const efeitoNovo = efeitoNoSaldo({
+        tipo: dados.tipo,
+        valorPago: resultadoParcelas.valorPago,
+        contaFinanceiraId: dados.contaFinanceiraId,
+      });
 
-      /*
-       * Cria as novas parcelas
-       */
-      for (let i = 0; i < quantidadeParcelas; i++) {
-        const numeroParcela = i + 1;
+      // 4. Calcula a diferença em centavos.
+      const ajusteCentavos = calcularAjusteSaldoCentavos(
+        efeitoAntigo,
+        efeitoNovo
+      );
 
-        const valorParcelaCentavos =
-          valorBase +
-          (i < resto ? 1 : 0);
+      // 5. Atualiza o lançamento.
+      const { count } = await tx.lancamento.updateMany({
+        where: {
+          id: lancamento.id,
+          usuarioId,
+          tipo: lancamento.tipo,
+          status: lancamento.status,
+          valorPago: lancamento.valorPago,
+          contaFinanceiraId: lancamento.contaFinanceiraId,
+        },
+        data: {
+          descricao: dados.descricao,
+          valor: dados.valor,
+          valorPago: resultadoParcelas.valorPago,
+          tipo: dados.tipo,
+          status: resultadoParcelas.status,
+          quantidadeParcelas: dados.quantidadeParcelas,
+          formaPagamento: dados.formaPagamento,
+          dataLancamento: dados.dataLancamento,
+          dataVencimento: dados.dataVencimento,
+          categoriaId: dados.categoriaId,
+          contaFinanceiraId: dados.contaFinanceiraId,
+          participanteId: dados.participanteId,
+        },
+      });
 
-        /*
-         * Se essa parcela já existia,
-         * preserva o status dela.
-         *
-         * Se for uma parcela nova,
-         * começa como PENDENTE.
-         */
-        const statusParcela =
-          statusParcelasExistentes.get(
-            numeroParcela
-          ) ?? StatusParcela.PENDENTE;
-
-        const vencimento = new Date(
-          dataVencimento ?? dataLancamento
+      if (count === 0) {
+        throw new ErroNegocio(
+          "Este lançamento foi alterado por outra operação. Recarregue a página e tente novamente."
         );
-
-        vencimento.setMonth(
-          vencimento.getMonth() + i
-        );
-
-        await tx.parcela.create({
-          data: {
-            lancamentoId: lancamento.id,
-            numeroParcela,
-            valorParcela:
-              valorParcelaCentavos / 100,
-            vencimento,
-            status: statusParcela,
-          },
-        });
       }
+
+      // 6. Ajusta o saldo da conta.
+      // Não utiliza conta.cartaoCredito como bloqueio.
+      if (ajusteCentavos !== 0 && conta) {
+        await aplicarAjusteSaldo(
+          tx,
+          usuarioId,
+          conta,
+          ajusteCentavos
+        );
+      }
+    });
+  } catch (e) {
+    if (e instanceof ErroNegocio) {
+      return { erro: e.message };
     }
-  });
+
+    throw e;
+  }
 
   revalidatePath("/lancamento/listar");
+  revalidatePath("/conta-financeira");
+  revalidatePath("/fatura");
+  revalidatePath("/");
 
   redirect("/lancamento/listar");
 }
@@ -882,221 +861,160 @@ export async function Pagar_fatura(
   formData: FormData
 ) {
   const usuarioId = await exigirUsuarioId();
-  const contaFinanceiraId = Number(
-    formData.get("contaFinanceiraId")
-  );
 
+  const contaFinanceiraId = Number(formData.get("contaFinanceiraId"));
   const mes = Number(formData.get("mes"));
   const ano = Number(formData.get("ano"));
 
-  if (!participanteId) {
+  if (!Number.isInteger(participanteId) || participanteId <= 0) {
     throw new Error("Participante não informado.");
   }
 
-  if (!contaFinanceiraId) {
+  if (!Number.isInteger(contaFinanceiraId) || contaFinanceiraId <= 0) {
     throw new Error("Selecione a conta financeira.");
   }
 
-  if (!mes || mes < 1 || mes > 12) {
+  if (!Number.isInteger(mes) || mes < 1 || mes > 12) {
     throw new Error("Mês inválido.");
   }
 
-  if (!ano) {
+  if (!Number.isInteger(ano) || ano < 1) {
     throw new Error("Ano inválido.");
   }
 
   const resultado = await prisma.$transaction(
     async (tx) => {
-      // =====================================================
-      // PARTICIPANTE
-      // =====================================================
-
-    const participante = await tx.participante.findFirst({
-      where: {
-        id: participanteId,
-        usuarioId,
-        ativo: true,
-      },
-    });
-
-    if (!participante) {
-      throw new Error("Participante não encontrado.");
-    }
-
-      // =====================================================
-      // CONTA FINANCEIRA
-      // =====================================================
-
-    const conta = await tx.contaFinanceira.findFirst({
-      where: {
-        id: contaFinanceiraId,
-        usuarioId,
-        ativo: true,
-      },
-    });
-
-    if (!conta) {
-      throw new Error("Conta financeira não encontrada.");
-    }
-
-      // =====================================================
-      // PERÍODO DA FATURA
-      // =====================================================
-
-      const inicioMes = new Date(
-        ano,
-        mes - 1,
-        1,
-        0,
-        0,
-        0,
-        0
-      );
-
-      const inicioProximoMes = new Date(
-        ano,
-        mes,
-        1,
-        0,
-        0,
-        0,
-        0
-      );
-
-      // =====================================================
-      // LANÇAMENTOS DO PARTICIPANTE
-      // =====================================================
-
-    const lancamentos = await tx.lancamento.findMany({
-      where: {
-        participanteId,
-        usuarioId,
-        tipo: "SAIDA",
-      },
-      include: {
-        parcelas: {
-          orderBy: {
-            numeroParcela: "asc",
-          },
+      const participante = await tx.participante.findFirst({
+        where: {
+          id: participanteId,
+          usuarioId,
+          ativo: true,
         },
-      },
-    });
+        select: { id: true },
+      });
 
-      if (lancamentos.length === 0) {
-        throw new Error(
-          "Nenhum lançamento encontrado para este participante."
-        );
+      if (!participante) {
+        throw new Error("Participante não encontrado.");
       }
 
-      // =====================================================
-      // PRIMEIRO: DESCOBRIR QUANTO SERÁ PAGO
-      // =====================================================
+      const conta = await tx.contaFinanceira.findFirst({
+        where: {
+          id: contaFinanceiraId,
+          usuarioId,
+          ativo: true,
+        },
+      });
 
-      let valorTotalPagamento = 0;
+      if (!conta) {
+        throw new Error("Conta financeira não encontrada.");
+      }
 
-      const pagamentos: {
-        tipo: "LANCAMENTO" | "PARCELA";
-        lancamentoId: number;
-        parcelaId?: number;
-        valor: number;
-      }[] = [];
+      const inicioMes = new Date(ano, mes - 1, 1);
+      const inicioProximoMes = new Date(ano, mes, 1);
+
+      const lancamentos = await tx.lancamento.findMany({
+        where: {
+          participanteId,
+          usuarioId,
+          tipo: TipoLancamento.SAIDA,
+        },
+        include: {
+          parcelas: {
+            orderBy: {
+              numeroParcela: "asc",
+            },
+          },
+        },
+      });
+
+      const pagamentos: PagamentoFatura[] = [];
 
       for (const lancamento of lancamentos) {
-        // ===================================================
-        // COBRANÇA ÚNICA
-        // ===================================================
-
+        // Lançamentos sem parcelamento
         if (lancamento.quantidadeParcelas <= 1) {
-          if (
-            lancamento.status ===
-            StatusLancamento.PAGO
-          ) {
-            continue;
-          }
+          if (!lancamento.dataVencimento) continue;
 
-          if (!lancamento.dataVencimento) {
-            continue;
-          }
-
-          const dataVencimento = new Date(
-            lancamento.dataVencimento
-          );
+          const vencimento = new Date(lancamento.dataVencimento);
 
           const pertenceAoMes =
-            dataVencimento >= inicioMes &&
-            dataVencimento < inicioProximoMes;
+            vencimento >= inicioMes &&
+            vencimento < inicioProximoMes;
 
-          if (!pertenceAoMes) {
-            continue;
+          if (!pertenceAoMes) continue;
+
+          const valorTotalCentavos = emCentavos(
+            Number(lancamento.valor)
+          );
+
+          const valorPagoAnteriorCentavos = emCentavos(
+            Number(lancamento.valorPago)
+          );
+
+          if (
+            valorTotalCentavos <= 0 ||
+            valorPagoAnteriorCentavos < 0 ||
+            valorPagoAnteriorCentavos > valorTotalCentavos
+          ) {
+            throw new Error(
+              `O lançamento "${lancamento.descricao}" possui valores inválidos.`
+            );
           }
 
-          const valor =
-            Number(lancamento.valor) -
-            Number(lancamento.valorPago);
-
-          if (valor <= 0) {
-            continue;
+          if (
+            lancamento.status === StatusLancamento.PAGO &&
+            valorPagoAnteriorCentavos !== valorTotalCentavos
+          ) {
+            throw new Error(
+              `O lançamento "${lancamento.descricao}" possui status incompatível com o valor pago.`
+            );
           }
+
+          const valorPendenteCentavos =
+            valorTotalCentavos - valorPagoAnteriorCentavos;
+
+          if (valorPendenteCentavos <= 0) continue;
 
           pagamentos.push({
             tipo: "LANCAMENTO",
             lancamentoId: lancamento.id,
-            valor,
+            valorCentavos: valorPendenteCentavos,
+            valorFinalCentavos: valorTotalCentavos,
+            valorPagoAnteriorCentavos,
           });
 
-          valorTotalPagamento += valor;
-
           continue;
         }
 
-        // ===================================================
-        // LANÇAMENTO PARCELADO
-        // ===================================================
+        // Parcelas pendentes com vencimento no mês selecionado
+        const parcelasDoMes = lancamento.parcelas.filter((parcela) => {
+          const vencimento = new Date(parcela.vencimento);
 
-        const parcelaDoMes =
-          lancamento.parcelas.find(
-            (parcela) => {
-              const vencimento =
-                new Date(parcela.vencimento);
-
-              return (
-                vencimento >= inicioMes &&
-                vencimento < inicioProximoMes
-              );
-            }
+          return (
+            vencimento >= inicioMes &&
+            vencimento < inicioProximoMes &&
+            parcela.status === StatusParcela.PENDENTE
           );
-
-        if (!parcelaDoMes) {
-          continue;
-        }
-
-        if (
-          parcelaDoMes.status ===
-          StatusParcela.PAGO
-        ) {
-          continue;
-        }
-
-        const valor =
-          Number(parcelaDoMes.valorParcela);
-
-        if (valor <= 0) {
-          continue;
-        }
-
-        pagamentos.push({
-          tipo: "PARCELA",
-          lancamentoId: lancamento.id,
-          parcelaId: parcelaDoMes.id,
-          valor,
         });
 
-        valorTotalPagamento += valor;
-      }
+        for (const parcela of parcelasDoMes) {
+          const valorCentavos = emCentavos(
+            Number(parcela.valorParcela)
+          );
 
-      // =====================================================
-      // NENHUM PAGAMENTO
-      // =====================================================
+          if (valorCentavos <= 0) {
+            throw new Error(
+              `A parcela ${parcela.numeroParcela} do lançamento "${lancamento.descricao}" possui valor inválido.`
+            );
+          }
+
+          pagamentos.push({
+            tipo: "PARCELA",
+            lancamentoId: lancamento.id,
+            parcelaId: parcela.id,
+            valorCentavos,
+          });
+        }
+      }
 
       if (pagamentos.length === 0) {
         throw new Error(
@@ -1104,211 +1022,32 @@ export async function Pagar_fatura(
         );
       }
 
-      // =====================================================
-      // VERIFICA SALDO
-      // =====================================================
-
-      const saldoAtual = Number(conta.saldo);
-
-      if (saldoAtual < valorTotalPagamento) {
-        throw new Error(
-          `Saldo insuficiente. Saldo disponível: R$ ${saldoAtual.toFixed(
-            2
-          )}. Valor da fatura: R$ ${valorTotalPagamento.toFixed(
-            2
-          )}.`
-        );
-      }
-
-      // =====================================================
-      // REALIZA OS PAGAMENTOS
-      // =====================================================
-
-      for (const pagamento of pagamentos) {
-        // ===================================================
-        // COBRANÇA ÚNICA
-        // ===================================================
-
-        if (
-          pagamento.tipo === "LANCAMENTO"
-        ) {
-          const lancamento =
-            await tx.lancamento.findUnique({
-              where: {
-                id: pagamento.lancamentoId,
-              },
-            });
-
-          if (!lancamento) {
-            throw new Error(
-              "Lançamento não encontrado."
-            );
-          }
-
-          await tx.lancamento.update({
-            where: {
-              id: lancamento.id,
-            },
-            data: {
-              status:
-                StatusLancamento.PAGO,
-
-              valorPago:
-                lancamento.valor,
-
-              dataPagamento:
-                new Date(),
-
-              contaFinanceiraId:
-                conta.id,
-            },
-          });
-
-          continue;
-        }
-
-        // ===================================================
-        // PARCELA
-        // ===================================================
-
-        if (!pagamento.parcelaId) {
-          throw new Error(
-            "Parcela não informada."
-          );
-        }
-
-        await tx.parcela.update({
-          where: {
-            id: pagamento.parcelaId,
-          },
-          data: {
-            status:
-              StatusParcela.PAGO,
-          },
-        });
-
-        // ===================================================
-        // VERIFICA TODAS AS PARCELAS
-        // ===================================================
-
-        const parcelasPendentes =
-          await tx.parcela.count({
-            where: {
-              lancamentoId:
-                pagamento.lancamentoId,
-
-              status:
-                StatusParcela.PENDENTE,
-            },
-          });
-
-        // ===================================================
-        // CALCULA VALOR TOTAL JÁ PAGO
-        // ===================================================
-
-        const parcelasPagas =
-          await tx.parcela.aggregate({
-            where: {
-              lancamentoId:
-                pagamento.lancamentoId,
-
-              status:
-                StatusParcela.PAGO,
-            },
-
-            _sum: {
-              valorParcela: true,
-            },
-          });
-
-        const valorPago =
-          Number(
-            parcelasPagas._sum
-              .valorParcela ?? 0
-          );
-
-        // ===================================================
-        // ATUALIZA LANÇAMENTO
-        // ===================================================
-
-        await tx.lancamento.update({
-          where: {
-            id: pagamento.lancamentoId,
-          },
-
-          data: {
-            valorPago,
-
-            status:
-              parcelasPendentes === 0
-                ? StatusLancamento.PAGO
-                : StatusLancamento.PENDENTE,
-
-            dataPagamento:
-              parcelasPendentes === 0
-                ? new Date()
-                : undefined,
-
-            contaFinanceiraId:
-              conta.id,
-          },
-        });
-      }
-
-      // =====================================================
-      // DEBITA A CONTA
-      // =====================================================
-
-      await tx.contaFinanceira.update({
-        where: {
-          id: conta.id,
-        },
-
-        data: {
-          saldo: {
-            decrement: valorTotalPagamento,
-          },
-        },
-      });
-
-      return {
-        quantidadePagamentos:
-          pagamentos.length,
-
-        valorTotalPago:
-          valorTotalPagamento,
-
-        saldoRestante:
-          saldoAtual -
-          valorTotalPagamento,
-      };
+      return executarPagamentosFatura(
+        tx,
+        usuarioId,
+        conta,
+        pagamentos
+      );
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     }
   );
-
-  // =======================================================
-  // ATUALIZA AS PÁGINAS
-  // =======================================================
 
   revalidatePath("/fatura");
   revalidatePath("/lancamento");
   revalidatePath("/conta-financeira");
+  revalidatePath("/");
 
   return {
     sucesso: true,
-
     mensagem:
       resultado.quantidadePagamentos === 1
         ? "Fatura paga com sucesso!"
         : `Fatura paga com sucesso! ${resultado.quantidadePagamentos} cobranças foram pagas.`,
-
-    quantidadePagamentos:
-      resultado.quantidadePagamentos,
-
-    valorTotalPago:
-      resultado.valorTotalPago,
-
-    saldoRestante:
-      resultado.saldoRestante,
+    quantidadePagamentos: resultado.quantidadePagamentos,
+    valorTotalPago: resultado.valorTotalPago,
+    saldoRestante: resultado.saldoRestante,
   };
 }
 
@@ -1318,403 +1057,191 @@ export async function Pagar_itens_fatura(
 ) {
   const usuarioId = await exigirUsuarioId();
 
-  const contaFinanceiraId = Number(
-    formData.get("contaFinanceiraId")
-  );
+  const contaFinanceiraId = Number(formData.get("contaFinanceiraId"));
 
-  const parcelaIds = formData
-    .getAll("parcelaIds")
-    .map(Number)
-    .filter((id) => Number.isInteger(id) && id > 0);
+  const parcelaIds = [
+    ...new Set(
+      formData
+        .getAll("parcelaIds")
+        .map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
 
-  const lancamentoIds = formData
-    .getAll("lancamentoIds")
-    .map(Number)
-    .filter((id) => Number.isInteger(id) && id > 0);
+  const lancamentoIds = [
+    ...new Set(
+      formData
+        .getAll("lancamentoIds")
+        .map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0)
+    ),
+  ];
 
-  if (!participanteId) {
+  if (!Number.isInteger(participanteId) || participanteId <= 0) {
     throw new Error("Participante não informado.");
   }
 
-  if (!contaFinanceiraId) {
+  if (!Number.isInteger(contaFinanceiraId) || contaFinanceiraId <= 0) {
     throw new Error("Selecione a conta financeira.");
   }
 
-  if (
-    parcelaIds.length === 0 &&
-    lancamentoIds.length === 0
-  ) {
-    throw new Error(
-      "Nenhum item foi selecionado para pagamento."
-    );
+  if (parcelaIds.length === 0 && lancamentoIds.length === 0) {
+    throw new Error("Nenhum item foi selecionado para pagamento.");
   }
 
   const resultado = await prisma.$transaction(
     async (tx) => {
-      // =====================================================
-      // PARTICIPANTE
-      // =====================================================
-
-      const participante =
-        await tx.participante.findFirst({
-          where: {
-            id: participanteId,
-            usuarioId,
-            ativo: true,
-          },
-        });
+      const participante = await tx.participante.findFirst({
+        where: {
+          id: participanteId,
+          usuarioId,
+          ativo: true,
+        },
+        select: { id: true },
+      });
 
       if (!participante) {
-        throw new Error(
-          "Participante não encontrado."
-        );
+        throw new Error("Participante não encontrado.");
       }
 
-      // =====================================================
-      // CONTA FINANCEIRA
-      // =====================================================
-
-      const conta =
-        await tx.contaFinanceira.findFirst({
-          where: {
-            id: contaFinanceiraId,
-            usuarioId,
-            ativo: true,
-          },
-        });
+      const conta = await tx.contaFinanceira.findFirst({
+        where: {
+          id: contaFinanceiraId,
+          usuarioId,
+          ativo: true,
+        },
+      });
 
       if (!conta) {
-        throw new Error(
-          "Conta financeira não encontrada."
-        );
+        throw new Error("Conta financeira não encontrada.");
       }
 
-      // =====================================================
-      // BUSCA OS ITENS SELECIONADOS
-      // =====================================================
+      const pagamentos: PagamentoFatura[] = [];
 
-      const pagamentos: {
-        tipo: "LANCAMENTO" | "PARCELA";
-        lancamentoId: number;
-        parcelaId?: number;
-        valor: number;
-      }[] = [];
-
-      // =====================================================
-      // PARCELAS SELECIONADAS
-      // =====================================================
-
+      // Parcelas selecionadas
       if (parcelaIds.length > 0) {
-        const parcelas =
-          await tx.parcela.findMany({
-            where: {
-              id: {
-                in: parcelaIds,
-              },
-              lancamento: {
-                usuarioId,
-                participanteId,
-                tipo: "SAIDA",
-              },
+        const parcelas = await tx.parcela.findMany({
+          where: {
+            id: {
+              in: parcelaIds,
             },
-          });
+            status: StatusParcela.PENDENTE,
+            lancamento: {
+              usuarioId,
+              participanteId,
+              tipo: TipoLancamento.SAIDA,
+            },
+          },
+        });
 
         if (parcelas.length !== parcelaIds.length) {
           throw new Error(
-            "Uma ou mais parcelas não pertencem a esta fatura."
+            "Uma ou mais parcelas não pertencem a esta fatura ou já foram pagas."
           );
         }
 
         for (const parcela of parcelas) {
-          if (
-            parcela.status === StatusParcela.PAGO
-          ) {
-            continue;
-          }
-
-          const valor = Number(
-            parcela.valorParcela
+          const valorCentavos = emCentavos(
+            Number(parcela.valorParcela)
           );
 
-          if (valor <= 0) {
-            continue;
+          if (valorCentavos <= 0) {
+            throw new Error("Uma parcela possui valor inválido.");
           }
 
           pagamentos.push({
             tipo: "PARCELA",
             lancamentoId: parcela.lancamentoId,
             parcelaId: parcela.id,
-            valor,
+            valorCentavos,
           });
         }
       }
 
-      // =====================================================
-      // LANÇAMENTOS SEM PARCELAMENTO
-      // =====================================================
-
+      // Lançamentos sem parcelamento
       if (lancamentoIds.length > 0) {
-        const lancamentos =
-          await tx.lancamento.findMany({
-            where: {
-              id: {
-                in: lancamentoIds,
-              },
-              usuarioId,
-              participanteId,
-              tipo: "SAIDA",
-              quantidadeParcelas: {
-                lte: 1,
-              },
+        const lancamentos = await tx.lancamento.findMany({
+          where: {
+            id: {
+              in: lancamentoIds,
             },
-          });
+            usuarioId,
+            participanteId,
+            tipo: TipoLancamento.SAIDA,
+            quantidadeParcelas: {
+              lte: 1,
+            },
+          },
+        });
 
-        if (
-          lancamentos.length !==
-          lancamentoIds.length
-        ) {
+        if (lancamentos.length !== lancamentoIds.length) {
           throw new Error(
             "Um ou mais lançamentos não pertencem a esta fatura ou possuem parcelas."
           );
         }
 
         for (const lancamento of lancamentos) {
+          const valorTotalCentavos = emCentavos(
+            Number(lancamento.valor)
+          );
+
+          const valorPagoAnteriorCentavos = emCentavos(
+            Number(lancamento.valorPago)
+          );
+
           if (
-            lancamento.status ===
-            StatusLancamento.PAGO
+            valorTotalCentavos <= 0 ||
+            valorPagoAnteriorCentavos < 0 ||
+            valorPagoAnteriorCentavos > valorTotalCentavos
           ) {
-            continue;
+            throw new Error(
+              `O lançamento "${lancamento.descricao}" possui valores inválidos.`
+            );
           }
 
-          const valor =
-            Number(lancamento.valor) -
-            Number(lancamento.valorPago);
+          if (
+            lancamento.status === StatusLancamento.PAGO &&
+            valorPagoAnteriorCentavos !== valorTotalCentavos
+          ) {
+            throw new Error(
+              `O lançamento "${lancamento.descricao}" possui status incompatível com o valor pago.`
+            );
+          }
 
-          if (valor <= 0) {
-            continue;
+          const valorPendenteCentavos =
+            valorTotalCentavos - valorPagoAnteriorCentavos;
+
+          if (valorPendenteCentavos <= 0) {
+            throw new Error(
+              `O lançamento "${lancamento.descricao}" já está totalmente pago.`
+            );
           }
 
           pagamentos.push({
             tipo: "LANCAMENTO",
             lancamentoId: lancamento.id,
-            valor,
+            valorCentavos: valorPendenteCentavos,
+            valorFinalCentavos: valorTotalCentavos,
+            valorPagoAnteriorCentavos,
           });
         }
       }
-
-      // =====================================================
-      // NENHUM PAGAMENTO
-      // =====================================================
 
       if (pagamentos.length === 0) {
-        throw new Error(
-          "Nenhum item pendente foi encontrado."
-        );
+        throw new Error("Nenhum item pendente foi encontrado.");
       }
 
-      // =====================================================
-      // VALOR TOTAL
-      // =====================================================
-
-      const valorTotalPagamento =
-        pagamentos.reduce(
-          (total, pagamento) =>
-            total + pagamento.valor,
-          0
-        );
-
-      // =====================================================
-      // VERIFICA SALDO
-      // =====================================================
-
-      const saldoAtual = Number(conta.saldo);
-
-      if (
-        saldoAtual < valorTotalPagamento
-      ) {
-        throw new Error(
-          `Saldo insuficiente. Saldo disponível: R$ ${saldoAtual.toFixed(
-            2
-          )}. Valor selecionado: R$ ${valorTotalPagamento.toFixed(
-            2
-          )}.`
-        );
-      }
-
-      // =====================================================
-      // REALIZA OS PAGAMENTOS
-      // =====================================================
-
-      for (const pagamento of pagamentos) {
-        // ===================================================
-        // LANÇAMENTO SIMPLES
-        // ===================================================
-
-        if (
-          pagamento.tipo === "LANCAMENTO"
-        ) {
-          const lancamento =
-            await tx.lancamento.findFirst({
-              where: {
-                id: pagamento.lancamentoId,
-                usuarioId,
-                participanteId,
-              },
-            });
-
-          if (!lancamento) {
-            throw new Error(
-              "Lançamento não encontrado."
-            );
-          }
-
-          await tx.lancamento.update({
-            where: {
-              id: lancamento.id,
-            },
-            data: {
-              status:
-                StatusLancamento.PAGO,
-              valorPago:
-                lancamento.valor,
-              dataPagamento:
-                new Date(),
-              contaFinanceiraId:
-                conta.id,
-            },
-          });
-
-          continue;
-        }
-
-        // ===================================================
-        // PARCELA
-        // ===================================================
-
-        if (!pagamento.parcelaId) {
-          throw new Error(
-            "Parcela não informada."
-          );
-        }
-
-        const parcela =
-          await tx.parcela.findFirst({
-            where: {
-              id: pagamento.parcelaId,
-              lancamento: {
-                usuarioId,
-                participanteId,
-              },
-            },
-          });
-
-        if (!parcela) {
-          throw new Error(
-            "Parcela não encontrada."
-          );
-        }
-
-        await tx.parcela.update({
-          where: {
-            id: parcela.id,
-          },
-          data: {
-            status: StatusParcela.PAGO,
-          },
-        });
-
-        // ===================================================
-        // VERIFICA TODAS AS PARCELAS
-        // ===================================================
-
-        const parcelasPendentes =
-          await tx.parcela.count({
-            where: {
-              lancamentoId:
-                pagamento.lancamentoId,
-              status:
-                StatusParcela.PENDENTE,
-            },
-          });
-
-        // ===================================================
-        // CALCULA TOTAL PAGO
-        // ===================================================
-
-        const parcelasPagas =
-          await tx.parcela.aggregate({
-            where: {
-              lancamentoId:
-                pagamento.lancamentoId,
-              status:
-                StatusParcela.PAGO,
-            },
-            _sum: {
-              valorParcela: true,
-            },
-          });
-
-        const valorPago =
-          Number(
-            parcelasPagas._sum
-              .valorParcela ?? 0
-          );
-
-        // ===================================================
-        // ATUALIZA LANÇAMENTO
-        // ===================================================
-
-        await tx.lancamento.update({
-          where: {
-            id: pagamento.lancamentoId,
-          },
-          data: {
-            valorPago,
-            status:
-              parcelasPendentes === 0
-                ? StatusLancamento.PAGO
-                : StatusLancamento.PENDENTE,
-            dataPagamento:
-              parcelasPendentes === 0
-                ? new Date()
-                : undefined,
-            contaFinanceiraId:
-              conta.id,
-          },
-        });
-      }
-
-      // =====================================================
-      // DEBITA A CONTA
-      // =====================================================
-
-      await tx.contaFinanceira.update({
-        where: {
-          id: conta.id,
-        },
-        data: {
-          saldo: {
-            decrement:
-              valorTotalPagamento,
-          },
-        },
-      });
-
-      return {
-        quantidadePagamentos:
-          pagamentos.length,
-        valorTotalPago:
-          valorTotalPagamento,
-        saldoRestante:
-          saldoAtual -
-          valorTotalPagamento,
-      };
+      return executarPagamentosFatura(
+        tx,
+        usuarioId,
+        conta,
+        pagamentos
+      );
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     }
   );
-
-  // =======================================================
-  // ATUALIZA AS PÁGINAS
-  // =======================================================
 
   revalidatePath("/fatura");
   revalidatePath("/lancamento");
@@ -1727,12 +1254,9 @@ export async function Pagar_itens_fatura(
       resultado.quantidadePagamentos === 1
         ? "Item pago com sucesso!"
         : `${resultado.quantidadePagamentos} itens foram pagos com sucesso.`,
-    quantidadePagamentos:
-      resultado.quantidadePagamentos,
-    valorTotalPago:
-      resultado.valorTotalPago,
-    saldoRestante:
-      resultado.saldoRestante,
+    quantidadePagamentos: resultado.quantidadePagamentos,
+    valorTotalPago: resultado.valorTotalPago,
+    saldoRestante: resultado.saldoRestante,
   };
 }
 
@@ -2068,4 +1592,491 @@ async function criarRecorrencia(
       },
     });
   }
+}
+
+//movimentar saldo
+async function movimentarSaldo(
+  tx: Prisma.TransactionClient,
+  usuarioId: number,
+  conta: { id: number; nome: string; saldo: unknown },
+  tipo: TipoLancamento,
+  valor: number
+) {
+  if (valor <= 0) return;
+
+  if (tipo === TipoLancamento.ENTRADA) {
+    await tx.contaFinanceira.updateMany({
+      where: {
+        id: conta.id,
+        usuarioId,
+        ativo: true,
+      },
+      data: {
+        saldo: { increment: valor },
+      },
+    });
+
+    return;
+  }
+
+  const { count } = await tx.contaFinanceira.updateMany({
+    where: {
+      id: conta.id,
+      usuarioId,
+      ativo: true,
+      saldo: { gte: valor },
+    },
+    data: {
+      saldo: { decrement: valor },
+    },
+  });
+
+  if (count === 0) {
+    const disponivel = Number(conta.saldo).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+
+    throw new ErroNegocio(
+      `Saldo insuficiente na conta "${conta.nome}" (disponível: ${disponivel}).`
+    );
+  }
+}
+
+
+
+
+
+// Calcula o efeito real do lançamento no saldo.
+function efeitoNoSaldo(e: EstadoLancamento): number {
+  if (e.contaFinanceiraId === null || e.valorPago <= 0) {
+    return 0;
+  }
+
+  return e.tipo === TipoLancamento.ENTRADA
+    ? e.valorPago
+    : -e.valorPago;
+}
+
+// Calcula a diferença entre o efeito novo e o antigo.
+function calcularAjusteSaldoCentavos(
+  efeitoAntigo: number,
+  efeitoNovo: number
+): number {
+  return emCentavos(efeitoNovo) - emCentavos(efeitoAntigo);
+}
+
+// Aplica a diferença no saldo da conta.
+async function aplicarAjusteSaldo(
+  tx: Prisma.TransactionClient,
+  usuarioId: number,
+  conta: { id: number; nome: string; saldo: unknown },
+  ajusteCentavos: number
+) {
+  if (ajusteCentavos === 0) return;
+
+  const ajuste = Math.abs(ajusteCentavos) / 100;
+
+  if (ajusteCentavos > 0) {
+    await tx.contaFinanceira.update({
+      where: { id: conta.id, usuarioId },
+      data: {
+        saldo: { increment: ajuste },
+      },
+    });
+
+    return;
+  }
+
+  const { count } = await tx.contaFinanceira.updateMany({
+    where: {
+      id: conta.id,
+      usuarioId,
+      saldo: { gte: ajuste },
+    },
+    data: {
+      saldo: { decrement: ajuste },
+    },
+  });
+
+  if (count === 0) {
+    const disponivel = Number(conta.saldo).toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+
+    throw new ErroNegocio(
+      `Saldo insuficiente na conta "${conta.nome}" para aplicar esta alteração (disponível: ${disponivel}).`
+    );
+  }
+}
+
+// Divide o valor total em parcelas sem perder centavos.
+function calcularValoresParcelas(
+  valor: number,
+  quantidade: number
+): number[] {
+  const totalCentavos = emCentavos(valor);
+  const valorBase = Math.floor(totalCentavos / quantidade);
+  const resto = totalCentavos % quantidade;
+
+  return Array.from({ length: quantidade }, (_, i) => {
+    const centavos = valorBase + (i < resto ? 1 : 0);
+    return centavos / 100;
+  });
+}
+
+// Calcula o vencimento mensal sem avançar incorretamente
+// quando o mês seguinte tem menos dias.
+function calcularVencimento(
+  dataBase: Date,
+  meses: number
+): Date {
+  const diaOriginal = dataBase.getDate();
+
+  const vencimento = new Date(dataBase);
+  vencimento.setDate(1);
+  vencimento.setMonth(vencimento.getMonth() + meses);
+
+  const ultimoDia = new Date(
+    vencimento.getFullYear(),
+    vencimento.getMonth() + 1,
+    0
+  ).getDate();
+
+  vencimento.setDate(Math.min(diaOriginal, ultimoDia));
+
+  return vencimento;
+}
+
+async function sincronizarParcelas(
+  tx: Prisma.TransactionClient,
+  lancamento: {
+    id: number;
+    valor: unknown;
+    quantidadeParcelas: number;
+    dataVencimento: Date | null;
+    dataLancamento: Date;
+    parcelas: {
+      id: number;
+      numeroParcela: number;
+      valorParcela: unknown;
+      vencimento: Date;
+      status: StatusParcela;
+      dataPagamento: Date | null;
+    }[];
+  },
+  dados: DadosLancamento
+): Promise<{
+  valorPago: number;
+  status: StatusLancamento;
+}> {
+  const parcelasExistentes = lancamento.parcelas;
+
+  const existeParcelaPaga = parcelasExistentes.some(
+    (parcela) => parcela.status === StatusParcela.PAGO
+  );
+
+  const dataBaseNova = dados.dataVencimento ?? dados.dataLancamento;
+  const dataBaseAntiga =
+    lancamento.dataVencimento ?? lancamento.dataLancamento;
+
+  const estruturaAlterada =
+    dados.quantidadeParcelas !== lancamento.quantidadeParcelas ||
+    emCentavos(dados.valor) !== emCentavos(Number(lancamento.valor)) ||
+    dataBaseNova.getTime() !== dataBaseAntiga.getTime();
+
+  // Preserva o histórico de parcelas já pagas.
+  if (existeParcelaPaga && estruturaAlterada) {
+    throw new ErroNegocio(
+      "Não é possível alterar o valor, a quantidade ou os vencimentos porque existem parcelas pagas."
+    );
+  }
+
+  // Lançamento sem parcelamento.
+  if (dados.quantidadeParcelas === 1) {
+    if (parcelasExistentes.length > 0) {
+      await tx.parcela.deleteMany({
+        where: { lancamentoId: lancamento.id },
+      });
+    }
+
+    return {
+      valorPago: dados.valorPago,
+      status: dados.status,
+    };
+  }
+
+  // Se já existem parcelas pagas, preserva todas.
+  if (existeParcelaPaga) {
+    const parcelasPagas = parcelasExistentes.filter(
+      (parcela) => parcela.status === StatusParcela.PAGO
+    );
+
+    const valorPagoCentavos = parcelasPagas.reduce(
+      (total, parcela) =>
+        total + emCentavos(Number(parcela.valorParcela)),
+      0
+    );
+
+    return {
+      valorPago: valorPagoCentavos / 100,
+      status:
+        parcelasPagas.length === dados.quantidadeParcelas
+          ? StatusLancamento.PAGO
+          : StatusLancamento.PENDENTE,
+    };
+  }
+
+  // Sem parcelas pagas: podemos recriar a estrutura.
+  await tx.parcela.deleteMany({
+    where: { lancamentoId: lancamento.id },
+  });
+
+  const valores = calcularValoresParcelas(
+    dados.valor,
+    dados.quantidadeParcelas
+  );
+
+  const parcelas = valores.map((valorParcela, index) => ({
+    lancamentoId: lancamento.id,
+    numeroParcela: index + 1,
+    valorParcela,
+    vencimento: calcularVencimento(dataBaseNova, index),
+    status: StatusParcela.PENDENTE,
+  }));
+
+  await tx.parcela.createMany({
+    data: parcelas,
+  });
+
+  return {
+    valorPago: 0,
+    status: StatusLancamento.PENDENTE,
+  };
+}
+
+
+
+
+
+//--------------------------------------------------------------------
+// funçoes para Pagar Fatura
+async function atualizarLancamentoPai(
+  tx: Prisma.TransactionClient,
+  lancamentoId: number,
+  contaFinanceiraId: number
+) {
+  const [parcelasPendentes, parcelasPagas] = await Promise.all([
+    tx.parcela.count({
+      where: {
+        lancamentoId,
+        status: StatusParcela.PENDENTE,
+      },
+    }),
+    tx.parcela.aggregate({
+      where: {
+        lancamentoId,
+        status: StatusParcela.PAGO,
+      },
+      _sum: {
+        valorParcela: true,
+      },
+    }),
+  ]);
+
+  const valorPago = Number(
+    parcelasPagas._sum.valorParcela ?? 0
+  );
+
+  await tx.lancamento.update({
+    where: { id: lancamentoId },
+    data: {
+      valorPago,
+      status:
+        parcelasPendentes === 0
+          ? StatusLancamento.PAGO
+          : StatusLancamento.PENDENTE,
+      dataPagamento:
+        parcelasPendentes === 0 ? new Date() : null,
+      contaFinanceiraId,
+    },
+  });
+}
+
+async function executarPagamentosFatura(
+  tx: Prisma.TransactionClient,
+  usuarioId: number,
+  conta: {
+    id: number;
+    nome: string;
+    saldo: unknown;
+  },
+  pagamentos: PagamentoFatura[]
+) {
+  const totalCentavos = pagamentos.reduce(
+    (total, pagamento) => total + pagamento.valorCentavos,
+    0
+  );
+
+  if (totalCentavos <= 0) {
+    throw new Error("O valor total do pagamento é inválido.");
+  }
+
+  const valorTotal = deCentavos(totalCentavos);
+
+  // Débito protegido contra saldo insuficiente e concorrência.
+  // Se algum pagamento falhar depois, a transação desfaz o débito.
+  await movimentarSaldo(
+    tx,
+    usuarioId,
+    conta,
+    TipoLancamento.SAIDA,
+    valorTotal
+  );
+
+  const lancamentosParceladosAtualizar = new Set<number>();
+  const agora = new Date();
+
+  for (const pagamento of pagamentos) {
+    if (pagamento.tipo === "LANCAMENTO") {
+      const valorFinal = deCentavos(
+        pagamento.valorFinalCentavos!
+      );
+
+      const valorAnterior = deCentavos(
+        pagamento.valorPagoAnteriorCentavos!
+      );
+
+      const atualizacao = await tx.lancamento.updateMany({
+        where: {
+          id: pagamento.lancamentoId,
+          usuarioId,
+          tipo: TipoLancamento.SAIDA,
+          AND: [
+            { valorPago: valorAnterior },
+            { valorPago: { lt: valorFinal } },
+          ],
+        },
+        data: {
+          valorPago: valorFinal,
+          status: StatusLancamento.PAGO,
+          dataPagamento: agora,
+          contaFinanceiraId: conta.id,
+        },
+      });
+
+      if (atualizacao.count !== 1) {
+        throw new Error(
+          "O lançamento foi alterado ou já foi pago. Atualize a fatura e tente novamente."
+        );
+      }
+
+      continue;
+    }
+
+    if (!pagamento.parcelaId) {
+      throw new Error("Parcela não informada.");
+    }
+
+    // Só permite pagar uma parcela que ainda esteja pendente.
+    const atualizacao = await tx.parcela.updateMany({
+      where: {
+        id: pagamento.parcelaId,
+        lancamentoId: pagamento.lancamentoId,
+        status: StatusParcela.PENDENTE,
+      },
+      data: {
+        status: StatusParcela.PAGO,
+        dataPagamento: agora,
+      },
+    });
+
+    if (atualizacao.count !== 1) {
+      throw new Error(
+        "Uma das parcelas já foi paga ou foi alterada. Atualize a fatura e tente novamente."
+      );
+    }
+
+    lancamentosParceladosAtualizar.add(
+      pagamento.lancamentoId
+    );
+  }
+
+  // Recalcula cada lançamento pai uma única vez,
+  // mesmo que várias parcelas dele tenham sido pagas.
+  for (const lancamentoId of lancamentosParceladosAtualizar) {
+    await atualizarLancamentoPai(
+      tx,
+      lancamentoId,
+      conta.id
+    );
+  }
+
+  // Busca o saldo atualizado no banco, evitando retornar
+  // um saldo calculado a partir de uma leitura antiga.
+  const contaAtualizada = await tx.contaFinanceira.findFirst({
+    where: {
+      id: conta.id,
+      usuarioId,
+      ativo: true,
+    },
+    select: {
+      saldo: true,
+    },
+  });
+
+  if (!contaAtualizada) {
+    throw new Error("Conta financeira não encontrada.");
+  }
+
+  return {
+    valorTotalPago: valorTotal,
+    saldoRestante: Number(contaAtualizada.saldo),
+    quantidadePagamentos: pagamentos.length,
+  };
+}
+
+function validarValorPagoLancamento(
+  lancamento: Pick<
+    DadosLancamento,
+    "valor" | "valorPago" | "status"
+  >
+) {
+  const valorTotalCentavos = emCentavos(lancamento.valor);
+  const valorPagoCentavos = emCentavos(lancamento.valorPago);
+
+  if (
+    valorPagoCentavos < 0 ||
+    valorPagoCentavos > valorTotalCentavos
+  ) {
+    throw new Error(
+      "O valor pago do lançamento está inconsistente."
+    );
+  }
+
+  if (
+    lancamento.status === StatusLancamento.PAGO &&
+    valorPagoCentavos !== valorTotalCentavos
+  ) {
+    throw new Error(
+      "O lançamento está marcado como pago, mas o valorPago não corresponde ao valor total."
+    );
+  }
+
+  if (
+    lancamento.status !== StatusLancamento.PAGO &&
+    valorPagoCentavos === valorTotalCentavos
+  ) {
+    throw new Error(
+      "O lançamento possui valorPago igual ao valor total, mas não está marcado como pago."
+    );
+  }
+
+  return {
+    valorTotalCentavos,
+    valorPagoAnteriorCentavos: valorPagoCentavos,
+    valorPendenteCentavos:
+      valorTotalCentavos - valorPagoCentavos,
+  };
 }

@@ -66,6 +66,7 @@ const contasFinanceiras = (
       categorias={categorias}
       participantes={participantes}
       contasFinanceiras={contasFinanceiras}
+
     />
   );
 }

@@ -16,7 +16,15 @@ export async function Nova_conta_financeira(formData: FormData) {
   );
   const objetivo = Number(formData.get("objetivo") ?? 0);
   const usuarioId = await exigirUsuarioId();
-  const { diaFechamento, diaVencimento } = lerDiasDaFatura(formData) || null;
+  const cartaoCredito = formData.get("cartaoCredito") === "on";
+
+  const { diaFechamento, diaVencimento } = cartaoCredito
+    ? lerDiasDaFatura(formData)
+    : { diaFechamento: null, diaVencimento: null };
+
+  if (cartaoCredito && (diaFechamento === null || diaVencimento === null)) {
+    throw new Error("Informe o fechamento e o vencimento da fatura do cartão.");
+  }
 
   if (usuarioId === null) {
     throw new Error("Usuário não autenticado.");
@@ -42,7 +50,8 @@ export async function Nova_conta_financeira(formData: FormData) {
         descricao,
         objetivo,
         diaFechamento,
-        diaVencimento, 
+        diaVencimento,
+        cartaoCredito,
         usuarioId,
       },
     });
@@ -126,7 +135,15 @@ export async function Editar_conta_financeira(
   if (objetivo !== null && (!Number.isFinite(objetivo) || objetivo < 0)) {
     throw new Error("O objetivo deve ser um valor válido e não negativo.");
   }
-  const { diaFechamento, diaVencimento } = lerDiasDaFatura(formData);
+  const cartaoCredito = formData.get("cartaoCredito") === "on";
+
+  const { diaFechamento, diaVencimento } = cartaoCredito
+    ? lerDiasDaFatura(formData)
+    : { diaFechamento: null, diaVencimento: null };
+
+  if (cartaoCredito && (diaFechamento === null || diaVencimento === null)) {
+    throw new Error("Informe o fechamento e o vencimento da fatura do cartão.");
+  }
 
   const conta =
     await prisma.contaFinanceira.findFirst({
@@ -153,6 +170,7 @@ export async function Editar_conta_financeira(
       objetivo,
       diaFechamento, 
       diaVencimento,
+      cartaoCredito
     },
   });
 

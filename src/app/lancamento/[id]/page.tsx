@@ -92,6 +92,7 @@ export default async function EditarLancamento({
       categorias={categorias}
       participantes={participantes}
       contasFinanceiras={contasFinanceiras}
+      contaFinanceiraId={lancamento.contaFinanceiraId}
       modoEdicao
     />
   );
